@@ -1,0 +1,28 @@
+appId: com.daazlabs.nexus-desktop
+productName: DaazNexus
+copyright: Copyright (C) 2025 DaazLabs
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - dist-electron/**/*
+  - src/renderer/dist/**/*
+  - package.json
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+  icon: build/icon.png
+
+win:
+  target:
+    - nsis
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.utilities
