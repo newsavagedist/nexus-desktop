@@ -15,12 +15,12 @@ export default function App() {
   const cleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
-    document.documentElement.style.setProperty("--theme-primary", themeColor)
+    document.documentElement.style.setProperty("--primary", themeColor)
     localStorage.setItem(THEME_STORAGE_KEY, themeColor)
   }, [themeColor])
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", colorMode)
+    document.documentElement.classList.toggle("dark", colorMode === "dark")
     localStorage.setItem(COLOR_MODE_KEY, colorMode)
   }, [colorMode])
 
