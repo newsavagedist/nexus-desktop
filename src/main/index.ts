@@ -33,6 +33,16 @@ function createWindow() {
     mainWindow.loadFile(path.join(ROOT, 'src', 'renderer', 'dist', 'index.html'))
   }
 
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    console.error(`[electron] Failed to load: ${errorDescription} (${errorCode})`)
+  })
+
+  mainWindow.webContents.on('console-message', (_event, _level, message) => {
+    if (message.includes('[electron]')) {
+      console.log(message)
+    }
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })

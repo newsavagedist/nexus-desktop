@@ -5,7 +5,7 @@
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev:renderer": "npm --prefix src/renderer run dev",
-    "dev:electron": "tsx src/main/index.ts --dev",
+    "dev:electron": "npm run build:main && npx electron . --dev --no-sandbox --ozone-platform-hint=x11 --disable-gpu",
     "dev": "concurrently -k \"npm run dev:renderer\" \"sleep 2 && npm run dev:electron\"",
     "build:renderer": "npm --prefix src/renderer run build",
     "build:main": "tsc -p tsconfig.electron.json",
