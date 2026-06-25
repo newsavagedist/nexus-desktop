@@ -5,10 +5,12 @@
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev:renderer": "npm --prefix src/renderer run dev",
-    "dev:electron": "npm run build:main && npx electron . --dev --no-sandbox --ozone-platform-hint=x11 --disable-gpu",
+    "dev:electron": "npm run build:main && npx electron . --dev --no-sandbox --disable-software-rasterizer --disable-gpu-compositing",
     "dev": "concurrently -k \"npm run dev:renderer\" \"sleep 2 && npm run dev:electron\"",
     "build:renderer": "npm --prefix src/renderer run build",
     "build:main": "tsc -p tsconfig.electron.json",
+    "start": "npm run build:main && npx electron . --no-sandbox --disable-software-rasterizer --disable-gpu-compositing",
+    "start:dev": "npm run build:main && npx electron . --dev --no-sandbox --disable-software-rasterizer --disable-gpu-compositing",
     "build": "npm run build:renderer && npm run build:main",
     "dist": "npm run build && electron-builder"
   },
