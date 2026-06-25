@@ -27,7 +27,11 @@
     "typescript": "^5.9.3"
   },
   "keywords": [],
-  "author": "DaazLabs",
+  "author": {
+    "name": "DaazLabs",
+    "email": "dev@daazlabs.com"
+  },
+  "homepage": "https://chat.daazlabs.com",
   "license": "ISC",
   "type": "module"
 }
