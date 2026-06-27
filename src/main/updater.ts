@@ -1,4 +1,5 @@
-import { autoUpdater } from 'electron-updater'
+import { createRequire } from 'node:module'
+const { autoUpdater } = createRequire(import.meta.url)('electron-updater')
 import { BrowserWindow, ipcMain } from 'electron'
 
 function send(event: string, data?: unknown) {
@@ -12,11 +13,11 @@ export function initAutoUpdater(isDev: boolean) {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
-  autoUpdater.on('update-available', (info) => {
+  autoUpdater.on('update-available', (info: any) => {
     send('nexus:update:available', { version: info.version })
   })
 
-  autoUpdater.on('download-progress', (progress) => {
+  autoUpdater.on('download-progress', (progress: any) => {
     send('nexus:update:progress', { percent: Math.round(progress.percent) })
   })
 
@@ -24,7 +25,7 @@ export function initAutoUpdater(isDev: boolean) {
     send('nexus:update:ready')
   })
 
-  autoUpdater.on('error', (err) => {
+  autoUpdater.on('error', (err: any) => {
     console.log('[updater] error:', err?.message)
   })
 
