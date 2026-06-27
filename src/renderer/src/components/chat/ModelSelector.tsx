@@ -1,9 +1,11 @@
-import { MODEL_CLASS_INFO } from "../../types"
 import type { ModelClassKey, CategorizedProvider } from "../../types"
+import type { Lang } from "../../i18n"
+import { t } from "../../i18n"
 
 const MODEL_CLASSES: ModelClassKey[] = ["auto", "cerebro", "trabalhador", "local"]
 
 interface Props {
+  lang: Lang
   modelClass: ModelClassKey
   onModelClassChange: (v: ModelClassKey) => void
   strategy: string
@@ -11,61 +13,87 @@ interface Props {
   selectedModel: string
   onModelChange: (v: string) => void
   availProviders: Record<string, CategorizedProvider[]> | null
+  cooldowns?: Record<string, number>
 }
 
 function getFilteredModels(classKey: string, availProviders: Record<string, CategorizedProvider[]> | null): string[] {
   if (!availProviders) return []
   const catMap: Record<string, ("free" | "paid" | "local")[]> = {
-    auto: ["free", "paid", "local"],
-    cerebro: ["paid"],
-    trabalhador: ["free"],
-    local: ["local"],
+    auto: ["free", "paid", "local"], cerebro: ["paid"], trabalhador: ["free"], local: ["local"],
   }
   const cats = catMap[classKey] || ["free", "paid", "local"]
   const available: string[] = []
-  for (const cat of cats) {
-    for (const p of (availProviders[cat] || [])) {
-      for (const m of p.models) {
-        if (!available.includes(m.id)) available.push(m.id)
-      }
-    }
-  }
+  for (const cat of cats) for (const p of (availProviders[cat] || [])) for (const m of p.models) if (!available.includes(m.id)) available.push(m.id)
   return available
 }
 
-export default function ModelSelector({ modelClass, onModelClassChange, strategy, onStrategyChange, selectedModel, onModelChange, availProviders }: Props) {
+function fmtCooldown(secs: number): string {
+  if (secs >= 60) return `${Math.ceil(secs / 60)}m`
+  return `${secs}s`
+}
+
+export default function ModelSelector({ lang, modelClass, onModelClassChange, strategy, onStrategyChange, selectedModel, onModelChange, availProviders, cooldowns }: Props) {
   const models = getFilteredModels(modelClass, availProviders)
+  const cooledModels = Object.keys(cooldowns ?? {})
+  const activeCooldowns = cooledModels.length > 0
+
+  const classLabels: Record<string, string> = {
+    auto: t(lang, "classAuto"),
+    cerebro: t(lang, "classBrain"),
+    trabalhador: t(lang, "classWorker"),
+    local: t(lang, "classLocal"),
+  }
 
   return (
     <div className="border-b border-border bg-card/50 px-4 py-2 flex items-center gap-3 overflow-x-auto">
       <div className="flex items-center gap-2 shrink-0">
-        <select value={modelClass} onChange={(e) => onModelClassChange(e.target.value as ModelClassKey)}
-          className="appearance-none bg-secondary text-foreground rounded-full px-3 py-1.5 text-sm border border-input outline-none"
-          style={{ color: MODEL_CLASS_INFO[modelClass].color }}>
-          {MODEL_CLASSES.map((key) => (
-            <option key={key} value={key} className="bg-card text-foreground" style={{ color: MODEL_CLASS_INFO[key].color }}>
-              {MODEL_CLASS_INFO[key].icon} {MODEL_CLASS_INFO[key].label}
-            </option>
+        <select value={modelClass} onChange={e => onModelClassChange(e.target.value as ModelClassKey)}
+          className="appearance-none bg-secondary text-muted-foreground rounded-full px-3 py-1.5 text-sm border border-input outline-none">
+          {MODEL_CLASSES.map(key => (
+            <option key={key} value={key} className="bg-card text-muted-foreground">{classLabels[key]}</option>
           ))}
         </select>
-        <select value={strategy} onChange={(e) => onStrategyChange(e.target.value)}
+        <select value={strategy} onChange={e => onStrategyChange(e.target.value)}
           className="appearance-none bg-secondary text-muted-foreground rounded-full px-2 py-1.5 text-xs border border-input outline-none">
-          <option value="smartest" className="bg-card text-foreground"> Smartest</option>
-          <option value="fastest" className="bg-card text-foreground"> Fastest</option>
-          <option value="priority" className="bg-card text-foreground"> Manual</option>
+          <option value="smartest" className="bg-card text-muted-foreground">{t(lang, "strategySmartest")}</option>
+          <option value="fastest" className="bg-card text-muted-foreground">{t(lang, "strategyFastest")}</option>
+          <option value="priority" className="bg-card text-muted-foreground">{t(lang, "strategyManual")}</option>
         </select>
         {modelClass !== "auto" && models.length > 0 && (
-          <select value={selectedModel} onChange={(e) => onModelChange(e.target.value)}
-            className="appearance-none bg-secondary text-foreground rounded-full px-3 py-1.5 text-sm border border-input outline-none max-w-[200px]">
-            {models.map((m) => (
-              <option key={m} value={m} className="bg-card text-foreground">{m}</option>
-            ))}
+          <select value={selectedModel} onChange={e => onModelChange(e.target.value)}
+            className="appearance-none bg-secondary text-muted-foreground rounded-full px-3 py-1.5 text-sm border border-input outline-none max-w-[200px]">
+            <option value="" className="bg-card text-muted-foreground">— auto —</option>
+            {models.map(m => {
+              const cd = cooldowns?.[m]
+              return (
+                <option key={m} value={m} className="bg-card text-muted-foreground">
+                  {cd ? `⏸ ${m} (${fmtCooldown(cd)})` : m}
+                </option>
+              )
+            })}
           </select>
         )}
-        <span className="hidden sm:inline text-muted-foreground text-xs max-w-64 truncate">
-          {MODEL_CLASS_INFO[modelClass].description}
-        </span>
+        {modelClass !== "auto" && models.length === 0 && availProviders && (
+          <span className="text-muted-foreground/50 text-xs">{t(lang, "noModels")}</span>
+        )}
       </div>
+
+      {/* Cooldown status strip — visible in AUTO mode when models are cooling down */}
+      {activeCooldowns && (
+        <div className="flex items-center gap-1.5 ml-auto shrink-0">
+          <span className="text-[10px] text-muted-foreground/60">{lang === "pt" ? "limite:" : "limit:"}</span>
+          {cooledModels.slice(0, 3).map(m => (
+            <span key={m} className="flex items-center gap-1 text-[10px] bg-destructive/10 text-destructive/80 border border-destructive/20 rounded-full px-2 py-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-destructive/60 shrink-0" />
+              <span className="max-w-[80px] truncate">{m}</span>
+              <span className="opacity-70">{fmtCooldown(cooldowns![m])}</span>
+            </span>
+          ))}
+          {cooledModels.length > 3 && (
+            <span className="text-[10px] text-muted-foreground/50">+{cooledModels.length - 3}</span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

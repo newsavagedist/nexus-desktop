@@ -1,14 +1,21 @@
 import { useState, useEffect, useRef } from "react"
 import type { PermissionRequest } from "./types"
 import type { Page } from "./constants"
+import type { Lang } from "./i18n"
 import { DEFAULT_THEME_COLOR, THEME_STORAGE_KEY, COLOR_MODE_KEY } from "./constants"
+import ErrorBoundary from "./components/ErrorBoundary"
 import ChatPage from "./pages/ChatPage"
 import SettingsPage from "./pages/SettingsPage"
 import AnalyticsPage from "./pages/AnalyticsPage"
+import MemoriesPage from "./pages/MemoriesPage"
+import FAQPage from "./pages/FAQPage"
 import PermissionModal from "./components/PermissionModal"
+
+const LANG_KEY = "daaznexus-lang"
 
 export default function App() {
   const [page, setPage] = useState<Page>("chat")
+  const [lang, setLang] = useState<Lang>(() => (localStorage.getItem(LANG_KEY) as Lang) || "pt")
   const [themeColor, setThemeColor] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) || DEFAULT_THEME_COLOR)
   const [colorMode, setColorMode] = useState<"dark" | "light">(() => (localStorage.getItem(COLOR_MODE_KEY) as "dark" | "light") || "dark")
   const [permReq, setPermReq] = useState<PermissionRequest | null>(null)
@@ -23,6 +30,10 @@ export default function App() {
     document.documentElement.classList.toggle("dark", colorMode === "dark")
     localStorage.setItem(COLOR_MODE_KEY, colorMode)
   }, [colorMode])
+
+  useEffect(() => {
+    localStorage.setItem(LANG_KEY, lang)
+  }, [lang])
 
   useEffect(() => {
     const nexus = (window as any).nexus
@@ -47,21 +58,41 @@ export default function App() {
   if (page === "settings") return (
     <>
       {permModal}
-      <SettingsPage themeColor={themeColor} setThemeColor={setThemeColor} onNavigate={setPage} />
+      <SettingsPage lang={lang} themeColor={themeColor} setThemeColor={setThemeColor} onNavigate={setPage} />
     </>
   )
 
   if (page === "analytics") return (
     <>
       {permModal}
-      <AnalyticsPage onNavigate={setPage} />
+      <AnalyticsPage onNavigate={setPage} lang={lang} />
+    </>
+  )
+
+  if (page === "memories") return (
+    <>
+      {permModal}
+      <MemoriesPage lang={lang} onNavigate={setPage} />
+    </>
+  )
+
+  if (page === "faq") return (
+    <>
+      {permModal}
+      <FAQPage lang={lang} onNavigate={setPage} />
     </>
   )
 
   return (
-    <>
+    <ErrorBoundary>
       {permModal}
-      <ChatPage onNavigate={setPage} colorMode={colorMode} setColorMode={setColorMode} />
-    </>
+      <ChatPage
+        onNavigate={setPage}
+        colorMode={colorMode}
+        setColorMode={setColorMode}
+        lang={lang}
+        setLang={setLang}
+      />
+    </ErrorBoundary>
   )
 }

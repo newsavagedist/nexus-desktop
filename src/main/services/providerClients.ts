@@ -1,4 +1,4 @@
-import { getProvider } from './catalog.js'
+import { getProvider, PROVIDERS } from './catalog.js'
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -189,6 +189,7 @@ export class OpenAIClient extends BaseClient {
     if (!reader) return
     const decoder = new TextDecoder()
     let buffer = ''
+    const accToolCalls = new Map<number, any>()
 
     while (true) {
       const { done, value } = await reader.read()
@@ -206,9 +207,24 @@ export class OpenAIClient extends BaseClient {
           const delta = parsed.choices?.[0]?.delta || {}
           const c = delta.content || delta.reasoning_content || delta.reasoning || ''
           if (c) yield c
+          if (delta.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index ?? 0
+              if (!accToolCalls.has(idx)) {
+                accToolCalls.set(idx, { id: '', type: 'function', function: { name: '', arguments: '' } })
+              }
+              const entry = accToolCalls.get(idx)!
+              if (tc.id) entry.id = tc.id
+              if (tc.function?.name) entry.function.name += tc.function.name
+              if (tc.function?.arguments) entry.function.arguments += tc.function.arguments
+            }
+          }
           if (parsed.usage) totalTokens = parsed.usage.total_tokens || 0
         } catch { /* skip malformed */ }
       }
+    }
+    if (accToolCalls.size > 0) {
+      yield `__TOOL_CALLS__:${JSON.stringify(Array.from(accToolCalls.values()))}`
     }
     yield `__TOKENS_USED__${totalTokens}`
   }
@@ -352,6 +368,7 @@ export class GoogleClient extends BaseClient {
     if (!reader) return
     const decoder = new TextDecoder()
     let buffer = ''
+    const accGoogleToolCalls: any[] = []
 
     while (true) {
       const { done, value } = await reader.read()
@@ -363,10 +380,14 @@ export class GoogleClient extends BaseClient {
         if (!line.startsWith('data: ')) continue
         try {
           const parsed = JSON.parse(line.slice(6))
-          const { text } = GoogleClient.parseGeminiResponse(parsed)
+          const { text, toolCalls } = GoogleClient.parseGeminiResponse(parsed)
           if (text) yield text
+          if (toolCalls?.length) accGoogleToolCalls.push(...toolCalls)
         } catch { /* skip */ }
       }
+    }
+    if (accGoogleToolCalls.length > 0) {
+      yield `__TOOL_CALLS__:${JSON.stringify(accGoogleToolCalls)}`
     }
   }
 }
@@ -377,8 +398,7 @@ export function getClient(providerId: string): BaseClient {
   const cached = clientCache.get(providerId)
   if (cached) return cached
 
-  const { PROVIDERS } = require('./catalog.js')
-  const provider = PROVIDERS.find((p: any) => p.id === providerId)
+  const provider = PROVIDERS.find(p => p.id === providerId)
   if (!provider) throw new Error(`Unknown provider: ${providerId}`)
 
   let client: BaseClient

@@ -64,3 +64,24 @@
   * { @apply border-border outline-ring/50; }
   body { @apply bg-background text-foreground font-sans text-sm antialiased; }
 }
+
+@keyframes thinkingDots {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75% { content: "..."; }
+  100% { content: ""; }
+}
+
+.thinking-text::after {
+  animation: thinkingDots 1.5s steps(4, end) infinite;
+  content: "";
+}
+
+@keyframes permSlideIn {
+  from { transform: translateX(calc(100% + 1rem)); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+.perm-toast {
+  animation: permSlideIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

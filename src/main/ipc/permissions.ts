@@ -11,7 +11,8 @@ interface PermissionsConfig {
   rules: Record<string, 'allow' | 'deny' | 'ask'>
 }
 
-const pending = new Map<string, (granted: boolean) => void>()
+const pending = new Map<string, { action: string; resolve: (granted: boolean) => void }>()
+const sessionRules = new Set<string>()
 let defaultPolicy: 'allow' | 'deny' | 'ask' = 'ask'
 let rules: Record<string, 'allow' | 'deny' | 'ask'> = {}
 let loaded = false
@@ -52,6 +53,11 @@ export async function checkOrRequestPermission(
 ): Promise<boolean> {
   ensureLoaded()
 
+  if (sessionRules.has(action)) {
+    console.log(`[perm] session auto-allow: ${action}`)
+    return true
+  }
+
   const rule = matchRule(action, detail)
   if (rule === 'allow') return true
   if (rule === 'deny') return false
@@ -65,10 +71,10 @@ export async function checkOrRequestPermission(
       resolve(false)
     }, timeoutMs)
 
-    pending.set(id, (granted: boolean) => {
+    pending.set(id, { action, resolve: (granted: boolean) => {
       clearTimeout(timer)
       resolve(granted)
-    })
+    }})
 
     const win = BrowserWindow.getAllWindows()[0]
     if (win) {
@@ -81,12 +87,32 @@ export async function checkOrRequestPermission(
   })
 }
 
-export function resolvePermission(id: string, granted: boolean): boolean {
-  const cb = pending.get(id)
-  if (!cb) return false
+export function resolvePermissionWithAlways(id: string, granted: boolean, always: boolean): boolean {
+  const entry = pending.get(id)
+  if (!entry) { console.log(`[perm] resolve: id not found: ${id}`); return false }
   pending.delete(id)
-  cb(granted)
+  if (granted && always) {
+    sessionRules.add(entry.action)
+    console.log(`[perm] session rule added: ${entry.action} — sessionRules now: [${[...sessionRules].join(', ')}]`)
+  }
+  console.log(`[perm] resolve: ${entry.action} granted=${granted} always=${always}`)
+  entry.resolve(granted)
+  const win = BrowserWindow.getAllWindows()[0]
+  if (win) {
+    win.webContents.send('nexus:permission:resolved', id)
+    console.log(`[perm] sent resolved event to renderer for id=${id.slice(-6)}`)
+  } else {
+    console.log(`[perm] no window to send resolved event`)
+  }
   return true
+}
+
+export function addSessionRule(action: string): void {
+  sessionRules.add(action)
+}
+
+export function clearSessionRules(): void {
+  sessionRules.clear()
 }
 
 export function setRule(pattern: string, decision: 'allow' | 'deny' | 'ask'): void {

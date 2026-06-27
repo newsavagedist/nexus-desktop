@@ -2,6 +2,12 @@ appId: com.daazlabs.nexus-desktop
 productName: DaazNexus
 copyright: Copyright (C) 2025 DaazLabs
 
+publish:
+  provider: github
+  owner: newsavagedist
+  repo: nexus-desktop
+  private: false
+
 directories:
   output: dist
   buildResources: build
@@ -17,6 +23,7 @@ linux:
     - deb
   category: Utility
   icon: build/icon.png
+  syncDesktopName: true
 
 win:
   target:

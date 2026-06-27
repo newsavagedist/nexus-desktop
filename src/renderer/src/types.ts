@@ -1,3 +1,11 @@
+export interface Project {
+  id: number
+  name: string
+  system_prompt: string
+  working_dir?: string
+  created_at: number
+}
+
 export interface Agent {
   agent_id: string
   display_name: string
@@ -22,6 +30,9 @@ export interface Message {
   model?: string
   tokens_used?: number
   duration?: number
+  multiGroupId?: string
+  isLoading?: boolean
+  attachments?: { url: string; name: string; type: string }[]
 }
 
 export interface ChatResponse {

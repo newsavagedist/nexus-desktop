@@ -16,16 +16,50 @@ const api = {
       ipcRenderer.on('nexus:permission:request', handler)
       return () => ipcRenderer.removeListener('nexus:permission:request', handler)
     },
-    respond: (id: string, granted: boolean) =>
-      ipcRenderer.send('nexus:permissions:response', id, granted),
+    respond: (id: string, granted: boolean, always?: boolean) =>
+      ipcRenderer.send('nexus:permissions:response', id, granted, always ?? false),
+    onResolved: (callback: (id: string) => void) => {
+      const handler = (_: any, id: string) => callback(id)
+      ipcRenderer.on('nexus:permission:resolved', handler)
+      return () => ipcRenderer.removeListener('nexus:permission:resolved', handler)
+    },
   },
   providers: {
     list: () => ipcRenderer.invoke('nexus:providers:list'),
     modelsByClass: (modelClass: string) => ipcRenderer.invoke('nexus:providers:modelsByClass', modelClass),
     modelsByProvider: (providerId: string) => ipcRenderer.invoke('nexus:providers:modelsByProvider', providerId),
     getProvider: (modelId: string) => ipcRenderer.invoke('nexus:providers:getProvider', modelId),
+    cooldowns: (): Promise<Record<string, number>> => ipcRenderer.invoke('nexus:providers:cooldowns'),
     send: (messages: unknown, options: unknown) =>
       ipcRenderer.invoke('nexus:providers:send', messages, options),
+    stream: (
+      messages: unknown,
+      options: unknown,
+      onChunk: (chunk: string) => void,
+      onDone: (result: { content: string; model: string }) => void,
+      onError: (err: string) => void,
+    ): (() => void) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const chunkHandler = (_: any, data: { id: string; chunk: string }) => {
+        if (data.id === id) onChunk(data.chunk)
+      }
+      const doneHandler = (_: any, data: { id: string; result: any }) => {
+        if (data.id === id) { cleanup(); onDone(data.result) }
+      }
+      const errorHandler = (_: any, data: { id: string; error: string }) => {
+        if (data.id === id) { cleanup(); onError(data.error) }
+      }
+      const cleanup = () => {
+        ipcRenderer.removeListener('nexus:stream:chunk', chunkHandler)
+        ipcRenderer.removeListener('nexus:stream:done', doneHandler)
+        ipcRenderer.removeListener('nexus:stream:error', errorHandler)
+      }
+      ipcRenderer.on('nexus:stream:chunk', chunkHandler)
+      ipcRenderer.on('nexus:stream:done', doneHandler)
+      ipcRenderer.on('nexus:stream:error', errorHandler)
+      ipcRenderer.send('nexus:stream:start', { id, messages, options })
+      return () => { cleanup(); ipcRenderer.send('nexus:stream:cancel', { id }) }
+    },
   },
   vault: {
     getKeys: () => ipcRenderer.invoke('nexus:vault:getKeys'),
@@ -38,6 +72,21 @@ const api = {
     minimize: () => ipcRenderer.send('nexus:window:minimize'),
     maximize: () => ipcRenderer.send('nexus:window:maximize'),
     close: () => ipcRenderer.send('nexus:window:close'),
+  },
+  update: {
+    download: () => ipcRenderer.invoke('nexus:update:download'),
+    install: () => ipcRenderer.invoke('nexus:update:install'),
+  },
+  dialog: {
+    openDir: (): Promise<string | null> => ipcRenderer.invoke('nexus:dialog:openDir'),
+  },
+  ipc: {
+    on: (channel: string, fn: (...args: any[]) => void) => {
+      const handler = (_: any, ...args: any[]) => fn(_, ...args)
+      ipcRenderer.on(channel, handler)
+      return handler
+    },
+    off: (channel: string, fn: (...args: any[]) => void) => ipcRenderer.removeListener(channel, fn),
   },
 }
 

@@ -4,7 +4,7 @@ import { getClient, type ChatMessage, type ChatResult } from './providerClients.
 import { checkAndRecord } from './rateLimiter.js'
 import { recordAttempt } from './analytics.js'
 
-const MAX_TOOL_ITERATIONS = 10
+const MAX_TOOL_ITERATIONS = 50
 const TIMEOUT = 30000
 const MAX_RETRIES = 20
 const EMPTY_CONTENT_RETRIES = 2
@@ -55,10 +55,15 @@ function prioritizeVision(models: string[]): string[] {
   return [...v, ...rest]
 }
 
+type ToolNotify = (ev: { id: string; name: string; args: Record<string, unknown>; status: 'running' | 'completed' | 'failed'; result?: string; started_at: number; completed_at?: number }) => void
+
 async function executeToolLoop(
   client: any, apiKey: string, model: string,
   workingMsgs: ChatMessage[], maxTokens: number, tools?: any[],
-  onToolCall?: (evt: any) => void,
+  requestPermission?: (action: string, detail: string) => Promise<boolean>,
+  isCancelled?: () => boolean,
+  notifyTool?: ToolNotify,
+  workingDir?: string,
 ): Promise<[ChatResult, ChatMessage[]]> {
   const seenCalls = new Set<string>()
   let result = await Promise.race([
@@ -67,6 +72,7 @@ async function executeToolLoop(
   ])
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+    if (isCancelled?.()) break
     if (!needsToolCall(result)) break
 
     const callSigs = (result.toolCalls || []).map((tc: any) =>
@@ -77,11 +83,18 @@ async function executeToolLoop(
 
     const resultsList: [any, string][] = []
     for (const tc of result.toolCalls || []) {
-      const fnName = tc.function.name
+      if (isCancelled?.()) break
+      const started_at = Date.now()
+      const tcId = tc.id || `${tc.function.name}-${started_at}`
+      let args: Record<string, unknown> = {}
+      try { args = JSON.parse(tc.function.arguments || '{}') } catch { /* */ }
+      notifyTool?.({ id: tcId, name: tc.function.name, args, status: 'running', started_at })
       try {
-        const r = await executeToolCall(tc)
+        const r = await executeToolCall(tc, requestPermission, workingDir)
+        notifyTool?.({ id: tcId, name: tc.function.name, args, status: 'completed', result: r, started_at, completed_at: Date.now() })
         resultsList.push([tc, r])
       } catch (e: any) {
+        notifyTool?.({ id: tcId, name: tc.function.name, args, status: 'failed', result: e.message, started_at, completed_at: Date.now() })
         resultsList.push([tc, `Error: ${e.message}`])
       }
     }
@@ -109,6 +122,48 @@ function needsToolCall(result: ChatResult): boolean {
   return !!(result.toolCalls?.length)
 }
 
+async function runToolsAndContinue(
+  client: any,
+  apiKey: string,
+  model: string,
+  messages: ChatMessage[],
+  toolCalls: any[],
+  maxTokens: number,
+  tools: any[],
+  requestPermission?: (action: string, detail: string) => Promise<boolean>,
+  isCancelled?: () => boolean,
+  notifyTool?: ToolNotify,
+  workingDir?: string,
+): Promise<string> {
+  if (isCancelled?.()) return ''
+  const resultsList: [any, string][] = []
+  for (const tc of toolCalls) {
+    if (isCancelled?.()) break
+    const started_at = Date.now()
+    const tcId = tc.id || `${tc.function.name}-${started_at}`
+    let args: Record<string, unknown> = {}
+    try { args = JSON.parse(tc.function.arguments || '{}') } catch { /* */ }
+    notifyTool?.({ id: tcId, name: tc.function.name, args, status: 'running', started_at })
+    try {
+      const r = await executeToolCall(tc, requestPermission, workingDir)
+      notifyTool?.({ id: tcId, name: tc.function.name, args, status: 'completed', result: r, started_at, completed_at: Date.now() })
+      resultsList.push([tc, r])
+    } catch (e: any) {
+      notifyTool?.({ id: tcId, name: tc.function.name, args, status: 'failed', result: e.message, started_at, completed_at: Date.now() })
+      resultsList.push([tc, `Error: ${e.message}`])
+    }
+  }
+  if (isCancelled?.()) return ''
+  const workingMsgs: ChatMessage[] = [
+    ...messages,
+    ...toolCallsToMessages(toolCalls),
+    ...toolResultsToMessages(resultsList),
+  ]
+  if (isCancelled?.()) return ''
+  const [result] = await executeToolLoop(client, apiKey, model, workingMsgs, maxTokens, tools.length ? tools : undefined, requestPermission, isCancelled, notifyTool, workingDir)
+  return result.content || ''
+}
+
 function toolCallsToMessages(toolCalls: any[]): ChatMessage[] {
   return [{
     role: 'assistant' as const,
@@ -129,28 +184,80 @@ function toolResultsToMessages(results: [any, string][]): ChatMessage[] {
   }))
 }
 
-async function executeToolCall(tc: any): Promise<string> {
+async function executeToolCall(
+  tc: any,
+  requestPermission?: (action: string, detail: string) => Promise<boolean>,
+  workingDir?: string,
+): Promise<string> {
+  const nodePath = await import('node:path')
   const name = tc.function.name
   const args = JSON.parse(tc.function.arguments || '{}')
+
+  // Resolve a file path: absolute paths are kept as-is; relative paths are
+  // resolved against workingDir when set, otherwise left for the OS to handle.
+  const resolve = (p: string): string => {
+    if (!p) return p
+    if (nodePath.isAbsolute(p)) return p
+    if (workingDir) return nodePath.resolve(workingDir, p)
+    return p
+  }
 
   switch (name) {
     case 'read_file': {
       const fs = await import('node:fs/promises')
-      return await fs.readFile(args.path, 'utf-8')
+      return await fs.readFile(resolve(args.path), 'utf-8')
     }
     case 'write_file': {
+      const resolved = resolve(args.path)
+      if (requestPermission) {
+        const ok = await requestPermission('write_file', `Write to: ${resolved}`)
+        if (!ok) return 'Permission denied.'
+      }
       const fs = await import('node:fs/promises')
-      await fs.writeFile(args.path, args.content, 'utf-8')
-      return `File written: ${args.path}`
+      await fs.mkdir(nodePath.dirname(resolved), { recursive: true })
+      await fs.writeFile(resolved, args.content, 'utf-8')
+      return `File written: ${resolved}`
     }
     case 'list_dir': {
       const fs = await import('node:fs/promises')
-      const entries = await fs.readdir(args.path)
+      const entries = await fs.readdir(resolve(args.path))
       return entries.join('\n')
     }
+    case 'create_dir': {
+      const resolved = resolve(args.path)
+      if (requestPermission) {
+        const ok = await requestPermission('create_dir', `Create directory: ${resolved}`)
+        if (!ok) return 'Permission denied.'
+      }
+      const fs = await import('node:fs/promises')
+      await fs.mkdir(resolved, { recursive: true })
+      return `Directory created: ${resolved}`
+    }
+    case 'delete_file': {
+      const resolved = resolve(args.path)
+      if (requestPermission) {
+        const ok = await requestPermission('delete_file', `Delete: ${resolved}`)
+        if (!ok) return 'Permission denied.'
+      }
+      const fs = await import('node:fs/promises')
+      await fs.unlink(resolved)
+      return `File deleted: ${resolved}`
+    }
+    case 'file_info': {
+      const fs = await import('node:fs/promises')
+      const stat = await fs.stat(resolve(args.path))
+      return JSON.stringify({ size: stat.size, isDirectory: stat.isDirectory(), mtime: stat.mtime })
+    }
     case 'bash': {
+      if (requestPermission) {
+        const ok = await requestPermission('bash', `Run: ${args.command}`)
+        if (!ok) return 'Permission denied.'
+      }
       const { execa } = await import('execa')
-      const result = await execa(args.command, { shell: true, timeout: 30000 })
+      // cwd makes relative paths work correctly in shell commands
+      const execOpts: any = { shell: true, timeout: 30000 }
+      if (workingDir) execOpts.cwd = workingDir
+      const result = await execa(args.command, execOpts)
       return result.stdout
     }
     case 'web_search': {
@@ -219,6 +326,16 @@ function sortByStrategy(models: string[], strategy: string): string[] {
     return [...models].sort((a, b) => (allM.get(b) || 5) - (allM.get(a) || 5))
   }
   return models
+}
+
+export function getCooldownState(): Record<string, number> {
+  const now = Date.now() / 1000
+  const result: Record<string, number> = {}
+  for (const [model, expiry] of cooldownCache) {
+    const remaining = Math.ceil(expiry - now)
+    if (remaining > 0) result[model] = remaining
+  }
+  return result
 }
 
 export async function routeWithFallback(
@@ -314,6 +431,11 @@ export async function* routeWithFallbackStream(
   strategy = 'priority',
   maxTokens = 4096,
   tools?: any[],
+  requestPermission?: (action: string, detail: string) => Promise<boolean>,
+  isCancelled?: () => boolean,
+  temperature?: number,
+  notifyTool?: ToolNotify,
+  workingDir?: string,
 ): AsyncGenerator<string> {
   const hasImages = messages.some(m => m.images?.length)
 
@@ -328,13 +450,27 @@ export async function* routeWithFallbackStream(
         if ('chatStream' in client) {
           try {
             let sent = false
-            for await (const chunk of (client as any).chatStream(apiKey, m, messages, { maxTokens })) {
-              sent = true
-              yield chunk
+            let pendingCalls: any[] | null = null
+            for await (const chunk of (client as any).chatStream(apiKey, m, messages, { maxTokens, tools, temperature })) {
+              if (typeof chunk === 'string' && chunk.startsWith('__TOKENS_USED__')) continue
+              if (typeof chunk === 'string' && chunk.startsWith('__TOOL_CALLS__:')) {
+                pendingCalls = JSON.parse(chunk.slice('__TOOL_CALLS__:'.length))
+                sent = true
+                continue
+              }
+              if (chunk) {
+                sent = true
+                yield chunk
+              }
+            }
+            if (pendingCalls) {
+              const finalContent = await runToolsAndContinue(client, apiKey!, m, messages, pendingCalls, maxTokens, tools || [], requestPermission, isCancelled, notifyTool, workingDir)
+              if (finalContent) yield finalContent
             }
             if (sent) {
               checkAndRecord(provider.id, 0)
               recordAttempt(provider.id, m, true)
+              yield `__MODEL__:${m}`
               return
             }
           } catch (err) {
@@ -374,15 +510,28 @@ export async function* routeWithFallbackStream(
 
         let holdFirst = true
         let totalTokens = 0
+        let pendingCalls: any[] | null = null
         try {
-          for await (const chunk of (client as any).chatStream(apiKey, m, messages, { maxTokens })) {
+          for await (const chunk of (client as any).chatStream(apiKey, m, messages, { maxTokens, tools, temperature })) {
             if (typeof chunk === 'string' && chunk.startsWith('__TOKENS_USED__')) {
               totalTokens = parseInt(chunk.split('__')[2], 10) || 0
+              continue
+            }
+            if (typeof chunk === 'string' && chunk.startsWith('__TOOL_CALLS__:')) {
+              pendingCalls = JSON.parse(chunk.slice('__TOOL_CALLS__:'.length))
               continue
             }
             if (chunk) {
               holdFirst = false
               yield chunk
+            }
+          }
+
+          if (pendingCalls) {
+            const finalContent = await runToolsAndContinue(client, apiKey!, m, messages, pendingCalls, maxTokens, tools || [], requestPermission, isCancelled, notifyTool)
+            if (finalContent) {
+              holdFirst = false
+              yield finalContent
             }
           }
 
@@ -395,6 +544,7 @@ export async function* routeWithFallbackStream(
           checkAndRecord(provider.id, totalTokens)
           recordAttempt(provider.id, m, true, totalTokens)
           cooldownCache.delete(m)
+          yield `__MODEL__:${m}`
           return
         } catch (err: any) {
           if (holdFirst) {
