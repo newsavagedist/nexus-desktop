@@ -927,7 +927,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
               )
               // Normal empty state
               return (
-                <div className="max-w-3xl mx-auto w-full mt-16 flex flex-col items-center gap-6">
+                <div className="max-w-7xl mx-auto w-full mt-16 flex flex-col items-center gap-6">
                   <p className="text-muted-foreground/70 text-sm">{t(lang, "howCanIHelp")}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                     {[
@@ -947,7 +947,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
               )
             })() : (
               renderItems.map(item => (
-                <div key={item.msg.id} className="max-w-3xl mx-auto w-full">
+                <div key={item.msg.id} className="max-w-7xl mx-auto w-full">
                   {item.msg.id < 0 && contextSummarizing ? (
                     <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground animate-pulse">
                       <span>⏳</span>
@@ -962,7 +962,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
               ))
             )}
 
-            <div className="max-w-3xl mx-auto w-full">
+            <div className="max-w-7xl mx-auto w-full">
               <InputArea lang={lang} input={input} onInputChange={setInput} onSend={sendMessage} onStop={handleStop}
                 loading={loading} hasFiles={pendingFiles.length > 0}
                 uploadButton={

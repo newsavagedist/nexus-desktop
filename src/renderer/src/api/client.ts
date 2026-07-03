@@ -44,13 +44,29 @@ export const api = {
 
   // Same as getProvidersCategorized but filtered to only providers with a configured API key.
   // Used by ModelSelector so only usable models appear in the dropdown.
+  // Local providers (Ollama, llama.cpp) are only included if their server is reachable.
   getAvailableProviders: async (): Promise<Record<string, CategorizedProvider[]>> => {
     const all = await api.getProvidersCategorized()
     const vaultKeys = await nexusApi.vault?.getKeys?.() || {}
+
+    const localReachable = (await Promise.all(
+      (all.local || []).map(async (p) => {
+        try {
+          const ctrl = new AbortController()
+          const timer = setTimeout(() => ctrl.abort(), 800)
+          await fetch(`${p.base_url}/models`, { signal: ctrl.signal })
+          clearTimeout(timer)
+          return p
+        } catch {
+          return null
+        }
+      })
+    )).filter(Boolean) as CategorizedProvider[]
+
     return {
       free: (all.free || []).filter(p => vaultKeys[p.id]),
       paid: (all.paid || []).filter(p => vaultKeys[p.id]),
-      local: all.local || [],
+      local: localReachable,
     }
   },
 

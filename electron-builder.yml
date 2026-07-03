@@ -33,3 +33,6 @@ mac:
   target:
     - dmg
   category: public.app-category.utilities
+  identity: null
+  gatekeeperAssess: false
+  hardenedRuntime: false
