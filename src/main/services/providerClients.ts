@@ -94,10 +94,10 @@ export class OpenAIClient extends BaseClient {
 
   async chat(
     apiKey: string, model: string, messages: ChatMessage[],
-    opts?: { maxTokens?: number; temperature?: number; tools?: any[] },
+    opts?: { maxTokens?: number; temperature?: number; tools?: any[]; baseUrlOverride?: string },
   ): Promise<ChatResult> {
     const provider = getProvider(model)
-    const baseUrl = provider?.baseUrl || 'https://api.openai.com/v1'
+    const baseUrl = opts?.baseUrlOverride || provider?.baseUrl || 'https://api.openai.com/v1'
     const maxTokens = opts?.maxTokens ?? 4096
     const temperature = opts?.temperature ?? 0.7
     const tools = opts?.tools
@@ -149,10 +149,10 @@ export class OpenAIClient extends BaseClient {
 
   async *chatStream(
     apiKey: string, model: string, messages: ChatMessage[],
-    opts?: { maxTokens?: number; temperature?: number; tools?: any[] },
+    opts?: { maxTokens?: number; temperature?: number; tools?: any[]; baseUrlOverride?: string },
   ): AsyncGenerator<string> {
     const provider = getProvider(model)
-    const baseUrl = provider?.baseUrl || 'https://api.openai.com/v1'
+    const baseUrl = opts?.baseUrlOverride || provider?.baseUrl || 'https://api.openai.com/v1'
     const maxTokens = opts?.maxTokens ?? 4096
     const temperature = opts?.temperature ?? 0.7
     const tools = opts?.tools

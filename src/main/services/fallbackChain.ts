@@ -436,22 +436,33 @@ export async function* routeWithFallbackStream(
   temperature?: number,
   notifyTool?: ToolNotify,
   workingDir?: string,
+  remoteOllamaUrl?: string,
+  remoteOllamaKey?: string,
 ): AsyncGenerator<string> {
   const hasImages = messages.some(m => m.images?.length)
+
+  const localIds = new Set(['ollama', 'llamacpp'])
+  function resolveLocalOverride(providerId: string): { apiKey: string; baseUrlOverride?: string } {
+    if (localIds.has(providerId) && remoteOllamaUrl) {
+      return { apiKey: remoteOllamaKey || '', baseUrlOverride: `${remoteOllamaUrl}/api/local/v1` }
+    }
+    return { apiKey: resolveKey(providerId) || '' }
+  }
 
   if (model) {
     const filtered = await filterModelsWithKeys([model])
     if (filtered.length) {
       const m = filtered[0]
       const provider = getProvider(m)
-      const apiKey = resolveKey(provider?.id || '')
-      if (provider && apiKey) {
+      const { apiKey, baseUrlOverride } = resolveLocalOverride(provider?.id || '')
+      const effectiveKey = apiKey || resolveKey(provider?.id || '')
+      if (provider && (effectiveKey || !provider.requiresKey)) {
         const client = getClient(provider.id)
         if ('chatStream' in client) {
           try {
             let sent = false
             let pendingCalls: any[] | null = null
-            for await (const chunk of (client as any).chatStream(apiKey, m, messages, { maxTokens, tools, temperature })) {
+            for await (const chunk of (client as any).chatStream(effectiveKey, m, messages, { maxTokens, tools, temperature, baseUrlOverride })) {
               if (typeof chunk === 'string' && chunk.startsWith('__TOKENS_USED__')) continue
               if (typeof chunk === 'string' && chunk.startsWith('__TOOL_CALLS__:')) {
                 pendingCalls = JSON.parse(chunk.slice('__TOOL_CALLS__:'.length))
@@ -503,7 +514,8 @@ export async function* routeWithFallbackStream(
         if (isOnCooldown(m)) continue
         const provider = getProvider(m)
         if (!provider) continue
-        const apiKey = resolveKey(provider.id)
+        const { apiKey: localKey, baseUrlOverride } = resolveLocalOverride(provider.id)
+        const apiKey = localKey || resolveKey(provider.id)
         if (!apiKey && provider.requiresKey) continue
         const client = getClient(provider.id)
         if (!('chatStream' in client)) continue
@@ -512,7 +524,7 @@ export async function* routeWithFallbackStream(
         let totalTokens = 0
         let pendingCalls: any[] | null = null
         try {
-          for await (const chunk of (client as any).chatStream(apiKey, m, messages, { maxTokens, tools, temperature })) {
+          for await (const chunk of (client as any).chatStream(apiKey, m, messages, { maxTokens, tools, temperature, baseUrlOverride })) {
             if (typeof chunk === 'string' && chunk.startsWith('__TOKENS_USED__')) {
               totalTokens = parseInt(chunk.split('__')[2], 10) || 0
               continue

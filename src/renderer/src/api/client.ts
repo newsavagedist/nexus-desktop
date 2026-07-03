@@ -49,12 +49,19 @@ export const api = {
     const all = await api.getProvidersCategorized()
     const vaultKeys = await nexusApi.vault?.getKeys?.() || {}
 
+    const remote = api.getRemoteOllama()
     const localReachable = (await Promise.all(
       (all.local || []).map(async (p) => {
         try {
           const ctrl = new AbortController()
           const timer = setTimeout(() => ctrl.abort(), 800)
-          await fetch(`${p.base_url}/models`, { signal: ctrl.signal })
+          const url = remote.url
+            ? `${remote.url}/api/local/v1/models`
+            : `${p.base_url}/models`
+          const headers: Record<string, string> = remote.url && remote.key
+            ? { Authorization: `Bearer ${remote.key}` }
+            : {}
+          await fetch(url, { signal: ctrl.signal, headers })
           clearTimeout(timer)
           return p
         } catch {
@@ -68,6 +75,17 @@ export const api = {
       paid: (all.paid || []).filter(p => vaultKeys[p.id]),
       local: localReachable,
     }
+  },
+
+  getRemoteOllama: (): { url: string; key: string } => {
+    try { return { url: '', key: '', ...JSON.parse(localStorage.getItem('nexus-remote-ollama') || '{}') } } catch { return { url: '', key: '' } }
+  },
+
+  saveRemoteOllama: async (url: string, key: string): Promise<void> => {
+    const clean = { url: url.trim().replace(/\/$/, ''), key: key.trim() }
+    localStorage.setItem('nexus-remote-ollama', JSON.stringify(clean))
+    if (clean.key) await nexusApi.vault?.setKey?.('remote-ollama', clean.key)
+    else await nexusApi.vault?.deleteKey?.('remote-ollama')
   },
 
   getProviderHealth: async (): Promise<Record<string, { healthy: boolean; failures: number; models: string[] }>> => {
@@ -116,7 +134,11 @@ export const api = {
       }
       onChunk(chunk)
     }
-    return nexusApi.providers.stream(messages, options, wrappedChunk, onDone, onError)
+    const remote = api.getRemoteOllama()
+    const enrichedOptions = remote.url
+      ? { ...options, remoteOllamaUrl: remote.url, remoteOllamaKey: remote.key }
+      : options
+    return nexusApi.providers.stream(messages, enrichedOptions, wrappedChunk, onDone, onError)
   },
 
   listConversations: async (): Promise<{ id: number; title: string; project_id?: number }[]> => {

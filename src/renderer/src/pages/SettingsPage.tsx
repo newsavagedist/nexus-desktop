@@ -36,9 +36,15 @@ export default function SettingsPage({ lang, themeColor, setThemeColor, onNaviga
   const [configs, setConfigs] = useState<Record<string, { api_key: string; model: string; temperature: number; has_api_key: boolean }>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null)
+  const [remoteUrl, setRemoteUrl] = useState("")
+  const [remoteKey, setRemoteKey] = useState("")
+  const [remoteSaved, setRemoteSaved] = useState<boolean | null>(null)
 
   useEffect(() => {
     api.getProvidersCategorized().then(setCategorized).catch(() => {})
+    const saved = api.getRemoteOllama()
+    setRemoteUrl(saved.url)
+    setRemoteKey(saved.key ? "••••••••" : "")
   }, [])
 
   useEffect(() => {
@@ -64,6 +70,13 @@ export default function SettingsPage({ lang, themeColor, setThemeColor, onNaviga
       })
     })
   }, [categorized])
+
+  const saveRemote = async () => {
+    const keyToSave = remoteKey === "••••••••" ? api.getRemoteOllama().key : remoteKey
+    await api.saveRemoteOllama(remoteUrl, keyToSave)
+    setRemoteSaved(true)
+    setTimeout(() => setRemoteSaved(null), 3000)
+  }
 
   const save = async (providerId: string) => {
     setSaving(providerId)
@@ -200,6 +213,64 @@ export default function SettingsPage({ lang, themeColor, setThemeColor, onNaviga
             </div>
           )
         })}
+      </div>
+
+      <div className="max-w-3xl mx-auto px-4 pb-4">
+        <div className="bg-card border border-primary/20 rounded-xl p-5">
+          <h3 className="text-foreground font-medium mb-1">
+            {lang === "pt" ? "Acesso Partilhado (Ollama remoto)" : "Shared Access (Remote Ollama)"}
+          </h3>
+          <p className="text-muted-foreground text-xs mb-4 leading-relaxed">
+            {lang === "pt"
+              ? "Permite usar os modelos locais (Ollama/llama.cpp) de outro computador através do chat.daazlabs.com. Pede o URL e a chave ao dono do servidor."
+              : "Use local models (Ollama/llama.cpp) from another machine via chat.daazlabs.com. Ask the server owner for the URL and key."}
+          </p>
+          <div className="space-y-2 mb-3">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                {lang === "pt" ? "URL do servidor" : "Server URL"}
+              </label>
+              <input
+                className="w-full rounded-lg px-3 py-2 border border-border bg-input/30 text-foreground text-sm outline-none font-mono"
+                type="url"
+                value={remoteUrl}
+                onChange={e => setRemoteUrl(e.target.value)}
+                placeholder="https://chat.daazlabs.com"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                {lang === "pt" ? "Chave de acesso" : "Access key"}
+              </label>
+              <input
+                className="w-full rounded-lg px-3 py-2 border border-border bg-input/30 text-foreground text-sm outline-none font-mono"
+                type="password"
+                value={remoteKey}
+                onChange={e => setRemoteKey(e.target.value)}
+                placeholder="a864f144..."
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={saveRemote}
+              className="bg-primary text-primary-foreground rounded-full px-4 py-2 font-medium text-sm hover:opacity-90 transition-opacity">
+              {lang === "pt" ? "Guardar" : "Save"}
+            </button>
+            {remoteUrl && (
+              <button
+                onClick={() => { setRemoteUrl(""); setRemoteKey(""); api.saveRemoteOllama("", "") }}
+                className="text-muted-foreground hover:text-destructive text-sm transition-colors">
+                {lang === "pt" ? "Remover" : "Remove"}
+              </button>
+            )}
+            {remoteSaved === true && (
+              <span className="text-xs text-green-400">
+                {lang === "pt" ? "Guardado — vai ao chat e selecciona Local" : "Saved — go to chat and select Local"}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 pb-6">

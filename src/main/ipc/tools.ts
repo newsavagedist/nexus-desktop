@@ -180,6 +180,8 @@ export function registerIpcHandlers(): void {
         options.temperature,
         notifyTool,
         options.workingDir,
+        options.remoteOllamaUrl,
+        options.remoteOllamaKey,
       )
       for await (const chunk of gen) {
         if (!activeStreams.get(id)) break
