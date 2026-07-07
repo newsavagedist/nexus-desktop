@@ -1,4 +1,4 @@
-import { getProvider, PROVIDERS } from './catalog.js'
+import { getProvider, getProviderById } from './catalog.js'
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -404,7 +404,7 @@ export function getClient(providerId: string): BaseClient {
   const cached = clientCache.get(providerId)
   if (cached) return cached
 
-  const provider = PROVIDERS.find(p => p.id === providerId)
+  const provider = getProviderById(providerId)
   if (!provider) throw new Error(`Unknown provider: ${providerId}`)
 
   let client: BaseClient

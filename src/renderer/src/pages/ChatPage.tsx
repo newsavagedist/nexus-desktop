@@ -270,7 +270,13 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
     }
   }, [])
 
-  useEffect(() => { api.getAvailableProviders().then(setAvailProviders).catch(() => {}) }, [])
+  useEffect(() => {
+    const loadProviders = () => api.getAvailableProviders().then(setAvailProviders).catch(() => {})
+    loadProviders()
+    // Re-fetch when the main process applies a fresh remote catalog
+    const unsubscribe = api.onCatalogUpdated(loadProviders)
+    return unsubscribe
+  }, [])
   useEffect(() => { api.listProjects().then(setProjects).catch(() => {}) }, [])
 
   // Poll cooldowns every 8s — ramps down when no active streams

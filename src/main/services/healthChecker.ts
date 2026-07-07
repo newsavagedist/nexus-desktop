@@ -1,4 +1,4 @@
-import { PROVIDERS } from './catalog.js'
+import { listProviders } from './catalog.js'
 import { resolveKey } from './keyVault.js'
 
 const CHECK_INTERVAL = 1800_000
@@ -26,7 +26,7 @@ function disableProvider(providerId: string): void {
 }
 
 export async function runHealthCheck(): Promise<void> {
-  for (const provider of PROVIDERS) {
+  for (const provider of listProviders()) {
     if (!provider.requiresKey) continue
     const apiKey = resolveKey(provider.id)
     if (!apiKey) continue
@@ -51,7 +51,7 @@ export function startHealthChecker(): void {
 
 export function getHealthStatus(): Record<string, { healthy: boolean; failures: number; models: string[] }> {
   const result: Record<string, any> = {}
-  for (const provider of PROVIDERS) {
+  for (const provider of listProviders()) {
     result[provider.id] = {
       healthy: !disabledProviders.has(provider.id),
       failures: failureCount.get(provider.id) || 0,

@@ -30,6 +30,11 @@ const api = {
     modelsByProvider: (providerId: string) => ipcRenderer.invoke('nexus:providers:modelsByProvider', providerId),
     getProvider: (modelId: string) => ipcRenderer.invoke('nexus:providers:getProvider', modelId),
     cooldowns: (): Promise<Record<string, number>> => ipcRenderer.invoke('nexus:providers:cooldowns'),
+    onCatalogUpdated: (callback: () => void): (() => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('nexus:catalog:updated', handler)
+      return () => ipcRenderer.removeListener('nexus:catalog:updated', handler)
+    },
     send: (messages: unknown, options: unknown) =>
       ipcRenderer.invoke('nexus:providers:send', messages, options),
     stream: (

@@ -253,6 +253,8 @@ const OLLAMA = provider('ollama', 'Ollama (local)', 'http://localhost:11434/v1',
   ], false,
 )
 
+// Bundled (compile-time) catalog. Used as the initial effective catalog and
+// as the fallback when the remote catalog is unavailable.
 export const PROVIDERS: ProviderInfo[] = [
   GROQ, OPENROUTER, GEMINI, GITHUB, CEREBRAS, NVIDIA, CLOUDFLARE, ZHIPU,
   KILO, POLLINATIONS, OVH, OPENCODE_ZEN,
@@ -260,32 +262,48 @@ export const PROVIDERS: ProviderInfo[] = [
   LLAMACPP, OLLAMA,
 ]
 
+// Effective catalog: starts as the bundled list, may be replaced at runtime
+// by remoteCatalog.ts once the server catalog is fetched (or restored from
+// its on-disk cache). All lookups below consult this list, so routing, IPC
+// and the renderer all see the same effective catalog.
+let effectiveProviders: ProviderInfo[] = PROVIDERS
+
+export function setEffectiveProviders(providers: ProviderInfo[]): void {
+  if (Array.isArray(providers) && providers.length > 0) {
+    effectiveProviders = providers
+  }
+}
+
 export function listProviders(): ProviderInfo[] {
-  return PROVIDERS
+  return effectiveProviders
 }
 
 export function listAvailable(): ModelInfo[] {
-  return PROVIDERS.flatMap(p => p.models)
+  return effectiveProviders.flatMap(p => p.models)
 }
 
 export function getProvider(modelId: string): ProviderInfo | undefined {
-  return PROVIDERS.find(p => p.models.some(m => m.id === modelId))
+  return effectiveProviders.find(p => p.models.some(m => m.id === modelId))
+}
+
+export function getProviderById(providerId: string): ProviderInfo | undefined {
+  return effectiveProviders.find(p => p.id === providerId)
 }
 
 export function getModelsByClass(modelClass: string): string[] {
   if (modelClass === 'cerebro') {
-    return PROVIDERS.flatMap(p => p.models).filter(m => m.paid).map(m => m.id)
+    return effectiveProviders.flatMap(p => p.models).filter(m => m.paid).map(m => m.id)
   }
   if (modelClass === 'trabalhador') {
-    return PROVIDERS.flatMap(p => p.models).filter(m => m.free).map(m => m.id)
+    return effectiveProviders.flatMap(p => p.models).filter(m => m.free).map(m => m.id)
   }
   if (modelClass === 'local') {
-    return PROVIDERS.flatMap(p => p.models).filter(m => !m.free && !m.paid).map(m => m.id)
+    return effectiveProviders.flatMap(p => p.models).filter(m => !m.free && !m.paid).map(m => m.id)
   }
   return []
 }
 
 export function getModelsByProvider(providerId: string): string[] {
-  const p = PROVIDERS.find(pr => pr.id === providerId)
+  const p = effectiveProviders.find(pr => pr.id === providerId)
   return p ? p.models.map(m => m.id) : []
 }

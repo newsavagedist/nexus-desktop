@@ -77,6 +77,12 @@ export const api = {
     }
   },
 
+  // Subscribe to main-process notifications that the effective model catalog
+  // changed (remote catalog fetched). Returns an unsubscribe function.
+  onCatalogUpdated: (callback: () => void): (() => void) => {
+    return nexusApi.providers?.onCatalogUpdated?.(callback) ?? (() => {})
+  },
+
   getRemoteOllama: (): { url: string; key: string } => {
     try { return { url: '', key: '', ...JSON.parse(localStorage.getItem('nexus-remote-ollama') || '{}') } } catch { return { url: '', key: '' } }
   },

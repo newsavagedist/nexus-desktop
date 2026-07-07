@@ -11,7 +11,8 @@ const EMPTY_CONTENT_RETRIES = 2
 
 const cooldownCache = new Map<string, number>()
 
-const AUTO_FALLBACK_ORDER = ['trabalhador', 'cerebro', 'local']
+// Paid models ('cerebro' class) are opt-in only: never part of AUTO fallback.
+const AUTO_FALLBACK_ORDER = ['trabalhador', 'local']
 
 function isOnCooldown(model: string): boolean {
   const expiry = cooldownCache.get(model)
@@ -212,6 +213,14 @@ function toolResultsToMessages(results: [any, string][]): ChatMessage[] {
   }))
 }
 
+// Tools that touch the filesystem or shell. These must NEVER run without an
+// explicit permission decision: if no permission callback is available on a
+// given code path, gated tools are denied outright instead of silently
+// executing.
+const GATED_TOOLS = new Set([
+  'bash', 'write_file', 'delete_file', 'create_dir', 'read_file', 'list_dir', 'file_info',
+])
+
 async function executeToolCall(
   tc: any,
   requestPermission?: (action: string, detail: string) => Promise<boolean>,
@@ -220,6 +229,11 @@ async function executeToolCall(
   const nodePath = await import('node:path')
   const name = tc.function.name
   const args = JSON.parse(tc.function.arguments || '{}')
+
+  // Unconditional permission gate: no callback -> no execution.
+  if (GATED_TOOLS.has(name) && !requestPermission) {
+    return 'Permission denied.'
+  }
 
   // Resolve a file path: absolute paths are kept as-is; relative paths are
   // resolved against workingDir when set, otherwise left for the OS to handle.
@@ -314,6 +328,7 @@ async function executeToolCall(
 async function tryModels(
   models: string[], messages: ChatMessage[],
   maxTokens: number, tools?: any[],
+  requestPermission?: (action: string, detail: string) => Promise<boolean>,
 ): Promise<ChatResult> {
   const errors: string[] = []
   let emptyCount = 0
@@ -332,7 +347,7 @@ async function tryModels(
     try {
       const startTime = Date.now()
       let workingMsgs = [...messages]
-      const [result] = await executeToolLoop(client, apiKey!, model, workingMsgs, maxTokens, tools)
+      const [result] = await executeToolLoop(client, apiKey!, model, workingMsgs, maxTokens, tools, requestPermission)
 
       result.duration = (Date.now() - startTime) / 1000
 
@@ -389,6 +404,7 @@ export async function routeWithFallback(
   maxTokens = 4096,
   tools?: any[],
   fallbackOrder?: string[],
+  requestPermission?: (action: string, detail: string) => Promise<boolean>,
 ): Promise<ChatResult> {
   const hasImages = messages.some(m => m.images?.length)
 
@@ -396,7 +412,7 @@ export async function routeWithFallback(
     const filtered = await filterModelsWithKeys([model])
     if (filtered.length) {
       try {
-        return await tryModels(filtered, messages, maxTokens, tools)
+        return await tryModels(filtered, messages, maxTokens, tools, requestPermission)
       } catch {
         console.warn(`[fallback] model override "${model}" failed, falling back`)
       }
@@ -439,7 +455,7 @@ export async function routeWithFallback(
         try {
           const startTime = Date.now()
           let workingMsgs = [...messages]
-          const [result] = await executeToolLoop(client, apiKey!, m, workingMsgs, maxTokens, tools)
+          const [result] = await executeToolLoop(client, apiKey!, m, workingMsgs, maxTokens, tools, requestPermission)
 
           if (result.content) {
             result.duration = (Date.now() - startTime) / 1000

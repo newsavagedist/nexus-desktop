@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerIpcHandlers } from './ipc/tools.js'
 import { initAutoUpdater } from './updater.js'
+import { initRemoteCatalog } from './services/remoteCatalog.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..', '..')
@@ -51,6 +52,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   registerIpcHandlers()
+  initRemoteCatalog() // non-blocking: bundled catalog serves until remote/cache applies
   createWindow()
   initAutoUpdater(isDev)
 })

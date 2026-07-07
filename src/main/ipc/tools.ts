@@ -159,6 +159,10 @@ export function registerIpcHandlers(): void {
       options.strategy,
       options.maxTokens,
       tools,
+      undefined,
+      // Same permission gate as the streaming path: without it, gated tools
+      // (bash/filesystem) are denied instead of silently executed.
+      checkOrRequestPermission,
     )
   })
 
