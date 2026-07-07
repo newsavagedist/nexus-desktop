@@ -14,6 +14,8 @@ interface Props {
   onModelChange: (v: string) => void
   availProviders: Record<string, CategorizedProvider[]> | null
   cooldowns?: Record<string, number>
+  toolsEnabled: boolean
+  onToolsToggle: (v: boolean) => void
 }
 
 function getFilteredModels(classKey: string, availProviders: Record<string, CategorizedProvider[]> | null): string[] {
@@ -32,7 +34,7 @@ function fmtCooldown(secs: number): string {
   return `${secs}s`
 }
 
-export default function ModelSelector({ lang, modelClass, onModelClassChange, strategy, onStrategyChange, selectedModel, onModelChange, availProviders, cooldowns }: Props) {
+export default function ModelSelector({ lang, modelClass, onModelClassChange, strategy, onStrategyChange, selectedModel, onModelChange, availProviders, cooldowns, toolsEnabled, onToolsToggle }: Props) {
   const models = getFilteredModels(modelClass, availProviders)
   const cooledModels = Object.keys(cooldowns ?? {})
   const activeCooldowns = cooledModels.length > 0
@@ -76,6 +78,19 @@ export default function ModelSelector({ lang, modelClass, onModelClassChange, st
         {modelClass !== "auto" && models.length === 0 && availProviders && (
           <span className="text-muted-foreground/50 text-xs">{t(lang, "noModels")}</span>
         )}
+        {/* Local tools opt-in toggle — off by default; when off the model gets no bash/filesystem tools */}
+        <button
+          type="button"
+          onClick={() => onToolsToggle(!toolsEnabled)}
+          title={t(lang, "localTools")}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs border transition-colors shrink-0 ${
+            toolsEnabled
+              ? "bg-primary/15 text-primary border-primary/40"
+              : "bg-secondary text-muted-foreground border-input"
+          }`}>
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${toolsEnabled ? "bg-primary" : "bg-muted-foreground/40"}`} />
+          🛠 {t(lang, "localTools")}
+        </button>
       </div>
 
       {/* Cooldown status strip — visible in AUTO mode when models are cooling down */}

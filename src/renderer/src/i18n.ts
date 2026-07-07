@@ -114,6 +114,8 @@ const translations = {
   classWorker:            { pt: "Trabalhador",             en: "Worker" },
   classLocal:             { pt: "Local",                   en: "Local" },
 
+  localTools:             { pt: "Ferramentas locais",      en: "Local tools" },
+
   strategySmartest:       { pt: "Inteligente",             en: "Smartest" },
   strategyFastest:        { pt: "Rápido",                  en: "Fastest" },
   strategyManual:         { pt: "Manual",                  en: "Manual" },

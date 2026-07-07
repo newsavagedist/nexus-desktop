@@ -46,7 +46,7 @@ export abstract class BaseClient {
 
   abstract chat(
     apiKey: string, model: string, messages: ChatMessage[],
-    opts?: { maxTokens?: number; temperature?: number; tools?: any[] },
+    opts?: { maxTokens?: number; temperature?: number; tools?: any[]; frequencyPenalty?: number },
   ): Promise<ChatResult>
 
   async checkHealth(apiKey: string, model: string): Promise<boolean> {
@@ -94,12 +94,13 @@ export class OpenAIClient extends BaseClient {
 
   async chat(
     apiKey: string, model: string, messages: ChatMessage[],
-    opts?: { maxTokens?: number; temperature?: number; tools?: any[]; baseUrlOverride?: string },
+    opts?: { maxTokens?: number; temperature?: number; tools?: any[]; baseUrlOverride?: string; frequencyPenalty?: number },
   ): Promise<ChatResult> {
     const provider = getProvider(model)
     const baseUrl = opts?.baseUrlOverride || provider?.baseUrl || 'https://api.openai.com/v1'
     const maxTokens = opts?.maxTokens ?? 4096
     const temperature = opts?.temperature ?? 0.7
+    const frequencyPenalty = opts?.frequencyPenalty ?? 0.2
     const tools = opts?.tools
 
     const body: any = {
@@ -107,6 +108,7 @@ export class OpenAIClient extends BaseClient {
       messages: prepareOpenAIMessages(messages),
       max_tokens: maxTokens,
       temperature,
+      frequency_penalty: frequencyPenalty,
       stream: false,
     }
     if (tools?.length) {
@@ -149,12 +151,13 @@ export class OpenAIClient extends BaseClient {
 
   async *chatStream(
     apiKey: string, model: string, messages: ChatMessage[],
-    opts?: { maxTokens?: number; temperature?: number; tools?: any[]; baseUrlOverride?: string },
+    opts?: { maxTokens?: number; temperature?: number; tools?: any[]; baseUrlOverride?: string; frequencyPenalty?: number },
   ): AsyncGenerator<string> {
     const provider = getProvider(model)
     const baseUrl = opts?.baseUrlOverride || provider?.baseUrl || 'https://api.openai.com/v1'
     const maxTokens = opts?.maxTokens ?? 4096
     const temperature = opts?.temperature ?? 0.7
+    const frequencyPenalty = opts?.frequencyPenalty ?? 0.2
     const tools = opts?.tools
     let totalTokens = 0
 
@@ -163,6 +166,7 @@ export class OpenAIClient extends BaseClient {
       messages: prepareOpenAIMessages(messages),
       max_tokens: maxTokens,
       temperature,
+      frequency_penalty: frequencyPenalty,
       stream: true,
     }
     if (tools?.length) {
@@ -287,18 +291,19 @@ export class GoogleClient extends BaseClient {
 
   async chat(
     apiKey: string, model: string, messages: ChatMessage[],
-    opts?: { maxTokens?: number; temperature?: number; tools?: any[] },
+    opts?: { maxTokens?: number; temperature?: number; tools?: any[]; frequencyPenalty?: number },
   ): Promise<ChatResult> {
     const provider = getProvider(model)
     const baseUrl = provider?.baseUrl || 'https://generativelanguage.googleapis.com/v1beta'
     const maxTokens = opts?.maxTokens ?? 4096
     const temperature = opts?.temperature ?? 0.7
+    const frequencyPenalty = opts?.frequencyPenalty ?? 0.2
     const tools = opts?.tools
 
     const { contents, systemMsg } = this.prepareContents(messages)
     const payload: any = {
       contents,
-      generationConfig: { maxOutputTokens: maxTokens, temperature },
+      generationConfig: { maxOutputTokens: maxTokens, temperature, frequencyPenalty },
     }
     if (systemMsg) payload.systemInstruction = { parts: [{ text: systemMsg }] }
     const geminiTools = GoogleClient.openaiToolsToGemini(tools)
@@ -334,18 +339,19 @@ export class GoogleClient extends BaseClient {
 
   async *chatStream(
     apiKey: string, model: string, messages: ChatMessage[],
-    opts?: { maxTokens?: number; temperature?: number; tools?: any[] },
+    opts?: { maxTokens?: number; temperature?: number; tools?: any[]; frequencyPenalty?: number },
   ): AsyncGenerator<string> {
     const provider = getProvider(model)
     const baseUrl = provider?.baseUrl || 'https://generativelanguage.googleapis.com/v1beta'
     const maxTokens = opts?.maxTokens ?? 4096
     const temperature = opts?.temperature ?? 0.7
+    const frequencyPenalty = opts?.frequencyPenalty ?? 0.2
     const tools = opts?.tools
 
     const { contents, systemMsg } = this.prepareContents(messages)
     const payload: any = {
       contents,
-      generationConfig: { maxOutputTokens: maxTokens, temperature },
+      generationConfig: { maxOutputTokens: maxTokens, temperature, frequencyPenalty },
     }
     if (systemMsg) payload.systemInstruction = { parts: [{ text: systemMsg }] }
     const geminiTools = GoogleClient.openaiToolsToGemini(tools)

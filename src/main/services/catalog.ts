@@ -66,7 +66,6 @@ const GEMINI = provider('gemini', 'Google Gemini', 'https://generativelanguage.g
   'https://aistudio.google.com/app/apikey', [
     model('gemini-2.5-flash', 1048576, { vision: true, tools: true, free: true, intelligenceScore: 8, speedScore: 7 }),
     model('gemini-2.5-flash-lite', 1048576, { vision: true, tools: true, free: true, intelligenceScore: 6, speedScore: 9 }),
-    model('gemini-3.5-flash', 1048576, { vision: true, tools: true, free: true, intelligenceScore: 9, speedScore: 7 }),
     model('gemini-2.0-flash', 1048576, { vision: true, tools: true, free: true, intelligenceScore: 7, speedScore: 8 }),
     model('gemini-1.5-flash', 1048576, { vision: true, tools: true, free: true, intelligenceScore: 6, speedScore: 9 }),
     model('gemma-4-31b-it', 32768, { tools: true, free: true, intelligenceScore: 7, speedScore: 6 }),

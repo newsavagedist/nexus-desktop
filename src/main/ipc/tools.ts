@@ -149,13 +149,16 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('nexus:providers:getProvider', (_event, modelId: string) => getProvider(modelId))
 
   ipcMain.handle('nexus:providers:send', async (_event, messages: any[], options: any) => {
+    // Local tools are opt-in: only attach them when the renderer explicitly
+    // enabled them. Missing/old renderers default to no tools.
+    const tools = options?.toolsEnabled === true ? DESKTOP_TOOLS : undefined
     return routeWithFallback(
       messages,
       options.modelClass,
       options.model,
       options.strategy,
       options.maxTokens,
-      DESKTOP_TOOLS,
+      tools,
     )
   })
 
@@ -167,6 +170,9 @@ export function registerIpcHandlers(): void {
       const chunk = `__TOOL_EVENT__:${JSON.stringify(ev)}`
       event.sender.send('nexus:stream:chunk', { id, chunk })
     }
+    // Local tools are opt-in: only attach them when the renderer explicitly
+    // enabled them. Missing/old renderers default to no tools.
+    const tools = options?.toolsEnabled === true ? DESKTOP_TOOLS : undefined
     try {
       const gen = routeWithFallbackStream(
         messages,
@@ -174,7 +180,7 @@ export function registerIpcHandlers(): void {
         options.model,
         options.strategy,
         options.maxTokens,
-        DESKTOP_TOOLS,
+        tools,
         checkOrRequestPermission,
         () => !activeStreams.get(id),
         options.temperature,
@@ -186,7 +192,7 @@ export function registerIpcHandlers(): void {
       for await (const chunk of gen) {
         if (!activeStreams.get(id)) break
         if (typeof chunk === 'string' && chunk.startsWith('__MODEL__:')) {
-          usedModel = chunk.slice(9)
+          usedModel = chunk.slice('__MODEL__:'.length)
           continue
         }
         if (typeof chunk === 'string' && chunk.startsWith('__TOOL_EVENT__:')) {

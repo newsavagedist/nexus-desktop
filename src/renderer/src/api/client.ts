@@ -100,7 +100,7 @@ export const api = {
 
   sendToProvider: async (
     messages: { role: string; content: string }[],
-    options: { modelClass?: string; model?: string; strategy?: string; temperature?: number },
+    options: { modelClass?: string; model?: string; strategy?: string; temperature?: number; toolsEnabled?: boolean },
   ): Promise<{ content: string; model?: string; tokensUsed?: number; duration?: number }> => {
     return nexusApi.providers?.send?.(messages, options) || { content: "No provider available" }
   },
@@ -115,7 +115,7 @@ export const api = {
 
   streamToProvider: (
     messages: { role: string; content: string }[],
-    options: { modelClass?: string; model?: string; strategy?: string; temperature?: number; workingDir?: string },
+    options: { modelClass?: string; model?: string; strategy?: string; temperature?: number; workingDir?: string; toolsEnabled?: boolean },
     onChunk: (chunk: string) => void,
     onDone: (result: { content: string; model: string }) => void,
     onError: (err: string) => void,

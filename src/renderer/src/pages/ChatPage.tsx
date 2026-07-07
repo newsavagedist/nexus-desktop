@@ -188,6 +188,8 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
   const [modelClass, setModelClass] = useState<ModelClassKey>("auto")
   const [strategy, setStrategy] = useState<string>("smartest")
   const [selectedModel, setSelectedModel] = useState("")
+  // Local tools (bash/filesystem) are opt-in — default OFF, persisted per user
+  const [toolsEnabled, setToolsEnabled] = useState<boolean>(() => localStorage.getItem("nexus.toolsEnabled") === "true")
   const [convId, setConvId] = useState<number | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -407,6 +409,11 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
   useEffect(() => {
     if (convId !== null) convIdRef.current = convId
   }, [convId])
+
+  const handleToolsToggle = useCallback((v: boolean) => {
+    setToolsEnabled(v)
+    localStorage.setItem("nexus.toolsEnabled", String(v))
+  }, [])
 
   const handleProjectCreate = useCallback(async (name: string) => {
     const p = await api.createProject(name).catch(() => null)
@@ -631,7 +638,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
       const activeProject = activeProjectId ? projects.find(p => p.id === activeProjectId) : null
       const cancel = api.streamToProvider(
         ipcMessages,
-        { modelClass, model: selectedModel || undefined, strategy, temperature, workingDir: activeProject?.working_dir || undefined },
+        { modelClass, model: selectedModel || undefined, strategy, temperature, workingDir: activeProject?.working_dir || undefined, toolsEnabled },
         (chunk) => {
           const s = activeStreamsRef.current.get(actualCid)
           if (!s) return
@@ -838,7 +845,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
         <ModelSelector lang={lang} modelClass={modelClass} onModelClassChange={v => { setModelClass(v); setSelectedModel("") }}
           strategy={strategy} onStrategyChange={setStrategy}
           selectedModel={selectedModel} onModelChange={setSelectedModel} availProviders={availProviders}
-          cooldowns={cooldowns} />
+          cooldowns={cooldowns} toolsEnabled={toolsEnabled} onToolsToggle={handleToolsToggle} />
 
         {/* System prompt bar */}
         <div className="border-b border-border/50 bg-muted/20 shrink-0">

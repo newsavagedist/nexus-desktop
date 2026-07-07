@@ -4,7 +4,7 @@ import { getClient, type ChatMessage, type ChatResult } from './providerClients.
 import { checkAndRecord } from './rateLimiter.js'
 import { recordAttempt } from './analytics.js'
 
-const MAX_TOOL_ITERATIONS = 50
+const MAX_TOOL_ITERATIONS = 10
 const TIMEOUT = 30000
 const MAX_RETRIES = 20
 const EMPTY_CONTENT_RETRIES = 2
@@ -57,6 +57,25 @@ function prioritizeVision(models: string[]): string[] {
 
 type ToolNotify = (ev: { id: string; name: string; args: Record<string, unknown>; status: 'running' | 'completed' | 'failed'; result?: string; started_at: number; completed_at?: number }) => void
 
+// Recursively sort object keys so that logically identical args always
+// produce the same JSON string, regardless of key order.
+function canonicalize(value: any): any {
+  if (Array.isArray(value)) return value.map(canonicalize)
+  if (value && typeof value === 'object') {
+    const out: Record<string, any> = {}
+    for (const k of Object.keys(value).sort()) out[k] = canonicalize(value[k])
+    return out
+  }
+  return value
+}
+
+// Signature = tool name + canonical JSON of its arguments.
+function toolCallSignature(tc: any): string {
+  let args: any
+  try { args = canonicalize(JSON.parse(tc.function.arguments || '{}')) } catch { args = tc.function.arguments || '' }
+  return `${tc.function.name}(${JSON.stringify(args)})`
+}
+
 async function executeToolLoop(
   client: any, apiKey: string, model: string,
   workingMsgs: ChatMessage[], maxTokens: number, tools?: any[],
@@ -64,8 +83,9 @@ async function executeToolLoop(
   isCancelled?: () => boolean,
   notifyTool?: ToolNotify,
   workingDir?: string,
+  seenCounts?: Map<string, number>,
 ): Promise<[ChatResult, ChatMessage[]]> {
-  const seenCalls = new Set<string>()
+  const seenCalls = seenCounts ?? new Map<string, number>()
   let result = await Promise.race([
     client.chat(apiKey, model, workingMsgs, { maxTokens, tools }),
     new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT)),
@@ -75,11 +95,12 @@ async function executeToolLoop(
     if (isCancelled?.()) break
     if (!needsToolCall(result)) break
 
-    const callSigs = (result.toolCalls || []).map((tc: any) =>
-      `${tc.function.name}(${tc.function.arguments || ''})`,
-    )
-    if (callSigs.every((sig: string) => seenCalls.has(sig))) break
-    callSigs.forEach((sig: string) => seenCalls.add(sig))
+    // Anti-loop: if ANY signature in this round was already executed once,
+    // do not execute it again — stop the tool loop here so the forced
+    // no-tools final completion below produces an answer instead.
+    const callSigs = (result.toolCalls || []).map(toolCallSignature)
+    if (callSigs.some((sig: string) => (seenCalls.get(sig) || 0) >= 1)) break
+    callSigs.forEach((sig: string) => seenCalls.set(sig, (seenCalls.get(sig) || 0) + 1))
 
     const resultsList: [any, string][] = []
     for (const tc of result.toolCalls || []) {
@@ -160,7 +181,14 @@ async function runToolsAndContinue(
     ...toolResultsToMessages(resultsList),
   ]
   if (isCancelled?.()) return ''
-  const [result] = await executeToolLoop(client, apiKey, model, workingMsgs, maxTokens, tools.length ? tools : undefined, requestPermission, isCancelled, notifyTool, workingDir)
+  // Seed the anti-loop counter with the calls we just executed so the model
+  // cannot immediately repeat them inside the tool loop.
+  const seenCounts = new Map<string, number>()
+  for (const tc of toolCalls) {
+    const sig = toolCallSignature(tc)
+    seenCounts.set(sig, (seenCounts.get(sig) || 0) + 1)
+  }
+  const [result] = await executeToolLoop(client, apiKey, model, workingMsgs, maxTokens, tools.length ? tools : undefined, requestPermission, isCancelled, notifyTool, workingDir, seenCounts)
   return result.content || ''
 }
 
@@ -204,8 +232,13 @@ async function executeToolCall(
 
   switch (name) {
     case 'read_file': {
+      const resolved = resolve(args.path)
+      if (requestPermission) {
+        const ok = await requestPermission('read_file', `Read: ${resolved}`)
+        if (!ok) return 'Permission denied.'
+      }
       const fs = await import('node:fs/promises')
-      return await fs.readFile(resolve(args.path), 'utf-8')
+      return await fs.readFile(resolved, 'utf-8')
     }
     case 'write_file': {
       const resolved = resolve(args.path)
@@ -219,8 +252,13 @@ async function executeToolCall(
       return `File written: ${resolved}`
     }
     case 'list_dir': {
+      const resolved = resolve(args.path)
+      if (requestPermission) {
+        const ok = await requestPermission('list_dir', `List directory: ${resolved}`)
+        if (!ok) return 'Permission denied.'
+      }
       const fs = await import('node:fs/promises')
-      const entries = await fs.readdir(resolve(args.path))
+      const entries = await fs.readdir(resolved)
       return entries.join('\n')
     }
     case 'create_dir': {
@@ -244,8 +282,13 @@ async function executeToolCall(
       return `File deleted: ${resolved}`
     }
     case 'file_info': {
+      const resolved = resolve(args.path)
+      if (requestPermission) {
+        const ok = await requestPermission('file_info', `Inspect: ${resolved}`)
+        if (!ok) return 'Permission denied.'
+      }
       const fs = await import('node:fs/promises')
-      const stat = await fs.stat(resolve(args.path))
+      const stat = await fs.stat(resolved)
       return JSON.stringify({ size: stat.size, isDirectory: stat.isDirectory(), mtime: stat.mtime })
     }
     case 'bash': {
@@ -459,8 +502,8 @@ export async function* routeWithFallbackStream(
       if (provider && (effectiveKey || !provider.requiresKey)) {
         const client = getClient(provider.id)
         if ('chatStream' in client) {
+          let sent = false
           try {
-            let sent = false
             let pendingCalls: any[] | null = null
             for await (const chunk of (client as any).chatStream(effectiveKey, m, messages, { maxTokens, tools, temperature, baseUrlOverride })) {
               if (typeof chunk === 'string' && chunk.startsWith('__TOKENS_USED__')) continue
@@ -486,6 +529,13 @@ export async function* routeWithFallbackStream(
             }
           } catch (err) {
             console.warn(`[stream] override "${model}" failed:`, err)
+            if (sent) {
+              // Partial output already reached the renderer — stop here.
+              // Falling through to the retry loop would re-run the prompt
+              // and append a second answer after the partial one.
+              yield `__MODEL__:${m}`
+              return
+            }
           }
         }
       }
