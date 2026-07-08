@@ -196,7 +196,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [availProviders, setAvailProviders] = useState<Record<string, CategorizedProvider[]> | null>(null)
   const [permReq, setPermReq] = useState<PermissionRequest | null>(null)
-  const [updateState, setUpdateState] = useState<{ status: "available" | "downloading" | "ready" | "error"; version?: string; percent?: number; message?: string } | null>(null)
+  const [updateState, setUpdateState] = useState<{ status: "available" | "downloading" | "ready" | "error"; version?: string; percent?: number; message?: string; phase?: "download" | "install" } | null>(null)
   const [artifact, setArtifact] = useState<Artifact | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
   const [systemPrompt, setSystemPrompt] = useState("")
@@ -260,7 +260,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
     const onAvailable = (_: any, { version }: { version: string }) => setUpdateState({ status: "available", version })
     const onProgress = (_: any, { percent }: { percent: number }) => setUpdateState(prev => prev ? { ...prev, status: "downloading", percent } : null)
     const onReady = () => setUpdateState(prev => prev ? { ...prev, status: "ready" } : null)
-    const onError = (_: any, { message }: { message: string }) => setUpdateState(prev => ({ ...prev, status: "error", message, version: prev?.version }))
+    const onError = (_: any, { message, phase }: { message: string; phase?: "download" | "install" }) => setUpdateState(prev => ({ ...prev, status: "error", message, phase, version: prev?.version }))
     nexus.ipc.on("nexus:update:available", onAvailable)
     nexus.ipc.on("nexus:update:progress", onProgress)
     nexus.ipc.on("nexus:update:ready", onReady)
@@ -1099,7 +1099,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
               {lang === "pt" ? "Transferir" : "Download"}
             </button>
           )}
-          {updateState.status === "error" && (
+          {updateState.status === "error" && updateState.phase !== "install" && (
             <button onClick={() => { (window as any).nexus?.update?.download?.(); setUpdateState(prev => prev ? { ...prev, status: "downloading", percent: 0, message: undefined } : null) }}
               className="flex-1 py-2 text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
               {lang === "pt" ? "Tentar novamente" : "Retry"}
