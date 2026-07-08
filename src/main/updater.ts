@@ -27,6 +27,7 @@ export function initAutoUpdater(isDev: boolean) {
 
   autoUpdater.on('error', (err: any) => {
     console.log('[updater] error:', err?.message)
+    send('nexus:update:error', { message: err?.message ?? 'unknown error' })
   })
 
   ipcMain.handle('nexus:update:download', () => autoUpdater.downloadUpdate())

@@ -196,7 +196,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [availProviders, setAvailProviders] = useState<Record<string, CategorizedProvider[]> | null>(null)
   const [permReq, setPermReq] = useState<PermissionRequest | null>(null)
-  const [updateState, setUpdateState] = useState<{ status: "available" | "downloading" | "ready"; version?: string; percent?: number } | null>(null)
+  const [updateState, setUpdateState] = useState<{ status: "available" | "downloading" | "ready" | "error"; version?: string; percent?: number; message?: string } | null>(null)
   const [artifact, setArtifact] = useState<Artifact | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
   const [systemPrompt, setSystemPrompt] = useState("")
@@ -260,13 +260,16 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
     const onAvailable = (_: any, { version }: { version: string }) => setUpdateState({ status: "available", version })
     const onProgress = (_: any, { percent }: { percent: number }) => setUpdateState(prev => prev ? { ...prev, status: "downloading", percent } : null)
     const onReady = () => setUpdateState(prev => prev ? { ...prev, status: "ready" } : null)
+    const onError = (_: any, { message }: { message: string }) => setUpdateState(prev => ({ ...prev, status: "error", message, version: prev?.version }))
     nexus.ipc.on("nexus:update:available", onAvailable)
     nexus.ipc.on("nexus:update:progress", onProgress)
     nexus.ipc.on("nexus:update:ready", onReady)
+    nexus.ipc.on("nexus:update:error", onError)
     return () => {
       nexus.ipc.off("nexus:update:available", onAvailable)
       nexus.ipc.off("nexus:update:progress", onProgress)
       nexus.ipc.off("nexus:update:ready", onReady)
+      nexus.ipc.off("nexus:update:error", onError)
     }
   }, [])
 
@@ -1073,12 +1076,16 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
               {updateState.status === "available" && `Nova versão ${updateState.version} disponível`}
               {updateState.status === "downloading" && `A transferir… ${updateState.percent ?? 0}%`}
               {updateState.status === "ready" && "Pronto para instalar"}
+              {updateState.status === "error" && (lang === "pt" ? "Falha na actualização" : "Update failed")}
             </span>
           </div>
           {updateState.status === "downloading" && (
             <div className="h-1 bg-muted rounded-full overflow-hidden mt-1">
               <div className="h-full bg-primary transition-all rounded-full" style={{ width: `${updateState.percent ?? 0}%` }} />
             </div>
+          )}
+          {updateState.status === "error" && updateState.message && (
+            <p className="text-[10px] text-muted-foreground mt-1 break-words">{updateState.message}</p>
           )}
         </div>
         <div className="flex border-t border-border">
@@ -1090,6 +1097,12 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
             <button onClick={() => { (window as any).nexus?.update?.download?.(); setUpdateState(prev => prev ? { ...prev, status: "downloading", percent: 0 } : null) }}
               className="flex-1 py-2 text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
               {lang === "pt" ? "Transferir" : "Download"}
+            </button>
+          )}
+          {updateState.status === "error" && (
+            <button onClick={() => { (window as any).nexus?.update?.download?.(); setUpdateState(prev => prev ? { ...prev, status: "downloading", percent: 0, message: undefined } : null) }}
+              className="flex-1 py-2 text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
+              {lang === "pt" ? "Tentar novamente" : "Retry"}
             </button>
           )}
           {updateState.status === "ready" && (
