@@ -54,7 +54,7 @@ jobs:
 
       - name: Package (Mac)
         if: matrix.platform == 'mac'
-        run: npx electron-builder --mac dmg --publish always
+        run: npx electron-builder --mac dmg zip --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
