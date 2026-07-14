@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, memo } from "react"
 import type { Message, ToolEvent } from "../../types"
 import type { Lang } from "../../i18n"
 import { t } from "../../i18n"
@@ -55,7 +55,7 @@ function ThinkBlock({ content, done, lang }: { content: string; done: boolean; l
   )
 }
 
-export default function MessageBubble({ lang, msg, streamingContent, toolEvents, isStreaming, showToolEvents, onEdit, onRegenerate }: Props) {
+function MessageBubble({ lang, msg, streamingContent, toolEvents, isStreaming, showToolEvents, onEdit, onRegenerate }: Props) {
   const isUser = msg.role === "user"
   const isSystem = msg.role === "system"
   const isAssistant = msg.role === "assistant"
@@ -185,3 +185,16 @@ export default function MessageBubble({ lang, msg, streamingContent, toolEvents,
     </div>
   )
 }
+
+// Historical (non-streaming) bubbles don't depend on streamingContent/toolEvents/loading,
+// so skip re-rendering them when the parent re-renders for unrelated reasons (e.g. every
+// keystroke in the input box, which otherwise forces a full markdown re-parse of the whole
+// conversation and shows up as visible jank while typing). The actively streaming bubble
+// still re-renders on every update, same as before.
+function messageBubblePropsEqual(prev: Readonly<Props>, next: Readonly<Props>): boolean {
+  if (next.isStreaming) return false
+  return prev.msg === next.msg && prev.lang === next.lang && prev.showToolEvents === next.showToolEvents
+    && prev.onEdit === next.onEdit && prev.onRegenerate === next.onRegenerate
+}
+
+export default memo(MessageBubble, messageBubblePropsEqual)

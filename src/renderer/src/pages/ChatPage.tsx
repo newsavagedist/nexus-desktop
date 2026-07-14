@@ -293,8 +293,11 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
     timer = setInterval(poll, 8000)
     return () => clearInterval(timer)
   }, [])
+  // During streaming, jump instantly (many updates/sec) — smooth scroll would
+  // restart its animation on every chunk and make the pane visibly judder.
+  // Only animate smoothly when a full message lands (send/receive).
   useEffect(() => {
-    if (isAtBottomRef.current) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    if (isAtBottomRef.current) messagesEndRef.current?.scrollIntoView({ behavior: streamingContent ? "auto" : "smooth" })
   }, [messages, streamingContent])
 
   const handleScrollContainer = useCallback(() => {
