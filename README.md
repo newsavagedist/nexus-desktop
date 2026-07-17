@@ -72,6 +72,18 @@ sudo xattr -rd com.apple.quarantine /Applications/DaazNexus.app
 
 O macOS vai lembrar a tua escolha e não volta a pedir.
 
+#### Opção D — Script automático (recomendada para atualizações)
+
+Como o macOS nunca completa o update automático sozinho (app não assinada), a forma mais rápida de atualizar é:
+
+1. Descarrega o `.dmg` da [última versão](https://github.com/newsavagedist/nexus-desktop/releases/latest) — fica em `~/Downloads`
+2. Descarrega o [`install-mac.command`](https://raw.githubusercontent.com/newsavagedist/nexus-desktop/main/install-mac.command)
+3. Dá duplo-clique no `install-mac.command` no Finder
+
+O script remove a quarentena, substitui a versão antiga em `/Applications` e pergunta se queres abrir o app — tudo automático, sem arrastar nada.
+
+> Se o Finder recusar abrir o `.command` por não ter permissão de execução, corre uma vez no Terminal: `chmod +x ~/Downloads/install-mac.command`
+
 ---
 
 ## Funcionalidades
