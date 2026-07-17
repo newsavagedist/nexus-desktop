@@ -136,7 +136,12 @@ export class OpenAIClient extends BaseClient {
 
     const choice = data.choices?.[0]
     const msg = choice?.message || {}
-    const content = msg.content || msg.reasoning || msg.reasoning_content || ''
+    const reasoning = msg.reasoning || msg.reasoning_content || ''
+    const answer = msg.content || ''
+    // Some providers (DeepSeek-R1, Qwen thinking, etc) return the chain-of-thought
+    // in a separate field — wrap it in <think> so the UI collapses it like it
+    // already does for models that inline reasoning between <think> tags themselves.
+    const content = reasoning ? `<think>${reasoning}</think>${answer}` : answer
     const toolCalls = msg.tool_calls
     const usage = data.usage || {}
     return {
@@ -194,6 +199,10 @@ export class OpenAIClient extends BaseClient {
     const decoder = new TextDecoder()
     let buffer = ''
     const accToolCalls = new Map<number, any>()
+    // Some providers (DeepSeek-R1, Qwen thinking, etc) stream the chain-of-thought
+    // in a separate delta field from the final answer — wrap it in <think> tags so
+    // the UI collapses it, same as models that emit <think> inline themselves.
+    let inThink = false
 
     while (true) {
       const { done, value } = await reader.read()
@@ -209,8 +218,16 @@ export class OpenAIClient extends BaseClient {
         try {
           const parsed = JSON.parse(chunk)
           const delta = parsed.choices?.[0]?.delta || {}
-          const c = delta.content || delta.reasoning_content || delta.reasoning || ''
-          if (c) yield c
+          const reasoningChunk = delta.reasoning_content || delta.reasoning || ''
+          const contentChunk = delta.content || ''
+          if (reasoningChunk) {
+            if (!inThink) { yield '<think>'; inThink = true }
+            yield reasoningChunk
+          }
+          if (contentChunk) {
+            if (inThink) { yield '</think>'; inThink = false }
+            yield contentChunk
+          }
           if (delta.tool_calls) {
             for (const tc of delta.tool_calls) {
               const idx = tc.index ?? 0
@@ -227,6 +244,7 @@ export class OpenAIClient extends BaseClient {
         } catch { /* skip malformed */ }
       }
     }
+    if (inThink) yield '</think>'
     if (accToolCalls.size > 0) {
       yield `__TOOL_CALLS__:${JSON.stringify(Array.from(accToolCalls.values()))}`
     }

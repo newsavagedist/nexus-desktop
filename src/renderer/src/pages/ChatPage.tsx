@@ -206,6 +206,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const isAtBottomRef = useRef(true)
+  const skipAnimRef = useRef(false)
   const mountedRef = useRef(true)
   const convIdRef = useRef<number | null>(null)
   const messagesRef = useRef<Message[]>([])
@@ -297,7 +298,10 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
   // restart its animation on every chunk and make the pane visibly judder.
   // Only animate smoothly when a full message lands (send/receive).
   useEffect(() => {
-    if (isAtBottomRef.current) messagesEndRef.current?.scrollIntoView({ behavior: streamingContent ? "auto" : "smooth" })
+    if (!isAtBottomRef.current) return
+    const instant = skipAnimRef.current || !!streamingContent
+    messagesEndRef.current?.scrollIntoView({ behavior: instant ? "auto" : "smooth" })
+    skipAnimRef.current = false
   }, [messages, streamingContent])
 
   const handleScrollContainer = useCallback(() => {
@@ -324,6 +328,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
     convIdRef.current = id
     setConvId(id)
     isAtBottomRef.current = true
+    skipAnimRef.current = true
     setShowScrollBtn(false)
     const active = activeStreamsRef.current.get(id)
     if (active) {
@@ -351,6 +356,8 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
     const conv = await api.createConversation(t(lang, "newConversation"), effectiveProjId ?? undefined).catch(() => null)
     if (conv && mountedRef.current) {
       convIdRef.current = conv.id
+      isAtBottomRef.current = true
+      skipAnimRef.current = true
       setConvId(conv.id); setMessages([])
       const projSystemPrompt = effectiveProjId
         ? projects.find(p => p.id === effectiveProjId)?.system_prompt || ""
@@ -525,9 +532,9 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
       if (!content) content = lang === "pt" ? "Analisa os seguintes ficheiros:" : "Analyze the following files:"
       for (const f of pendingFiles) {
         if (f.type === "text") {
-          content += `\n\n**${f.name}**\n\`\`\`${f.ext}\n${f.content}\n\`\`\``
+          content += `\n\n<attachment name="${f.name}">\n\`\`\`${f.ext}\n${f.content}\n\`\`\`\n</attachment>`
         } else if (f.type === "image") {
-          content += `\n\n**${f.name}**\n![${f.name}](${f.content})`
+          content += `\n\n<attachment name="${f.name}">\n![${f.name}](${f.content})\n</attachment>`
         } else {
           content += `\n\n**${f.name}** (${f.ext.toUpperCase()} — usa ferramentas para ler o conteúdo)`
         }
@@ -715,7 +722,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
 
   return (
     <ArtifactContext.Provider value={artifactCtx}>
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen overflow-hidden bg-background flex">
       <ConversationSidebar lang={lang} convs={convs} convId={convId} sidebarOpen={sidebarOpen} isMobile={isMobile}
         onSelect={switchConv} onNew={newConv} onDelete={deleteConv} onRename={renameConv}
         onClose={() => setSidebarOpen(false)} activeConvIds={activeConvIds}

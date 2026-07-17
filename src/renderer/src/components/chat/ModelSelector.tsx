@@ -1,3 +1,5 @@
+import { useState, useRef, useEffect } from "react"
+import { ChevronDown, Search, X } from "lucide-react"
 import type { ModelClassKey, CategorizedProvider } from "../../types"
 import type { Lang } from "../../i18n"
 import { t } from "../../i18n"
@@ -46,6 +48,37 @@ export default function ModelSelector({ lang, modelClass, onModelClassChange, st
     local: t(lang, "classLocal"),
   }
 
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerSearch, setPickerSearch] = useState("")
+  const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 })
+  const pickerBtnRef = useRef<HTMLButtonElement>(null)
+  const pickerDropRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!pickerOpen) return
+    const handler = (e: MouseEvent) => {
+      if (pickerBtnRef.current?.contains(e.target as Node) || pickerDropRef.current?.contains(e.target as Node)) return
+      setPickerOpen(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [pickerOpen])
+
+  useEffect(() => { setPickerOpen(false) }, [modelClass])
+
+  const openPicker = () => {
+    if (pickerBtnRef.current) {
+      const rect = pickerBtnRef.current.getBoundingClientRect()
+      setPickerPos({ top: rect.bottom + 4, left: rect.left })
+    }
+    setPickerOpen(true)
+    setPickerSearch("")
+  }
+
+  const filteredModels = pickerSearch
+    ? models.filter(m => m.toLowerCase().includes(pickerSearch.toLowerCase()))
+    : models
+
   return (
     <div className="border-b border-border bg-card/50 px-4 py-2 flex items-center gap-3 overflow-x-auto">
       <div className="flex items-center gap-2 shrink-0">
@@ -61,20 +94,69 @@ export default function ModelSelector({ lang, modelClass, onModelClassChange, st
           <option value="fastest" className="bg-card text-muted-foreground">{t(lang, "strategyFastest")}</option>
           <option value="priority" className="bg-card text-muted-foreground">{t(lang, "strategyManual")}</option>
         </select>
+
         {modelClass !== "auto" && models.length > 0 && (
-          <select value={selectedModel} onChange={e => onModelChange(e.target.value)}
-            className="appearance-none bg-secondary text-muted-foreground rounded-full px-3 py-1.5 text-sm border border-input outline-none max-w-[200px]">
-            <option value="" className="bg-card text-muted-foreground">— auto —</option>
-            {models.map(m => {
-              const cd = cooldowns?.[m]
-              return (
-                <option key={m} value={m} className="bg-card text-muted-foreground">
-                  {cd ? `⏸ ${m} (${fmtCooldown(cd)})` : m}
-                </option>
-              )
-            })}
-          </select>
+          <>
+            <button
+              ref={pickerBtnRef}
+              onClick={openPicker}
+              className="flex items-center gap-1.5 bg-secondary text-muted-foreground rounded-full px-3 py-1.5 text-sm border border-input outline-none max-w-[220px]">
+              <span className="truncate">{selectedModel || "— auto —"}</span>
+              <ChevronDown size={13} className={`shrink-0 transition-transform ${pickerOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {pickerOpen && (
+              <div
+                ref={pickerDropRef}
+                className="fixed z-[200] bg-card border border-border rounded-xl shadow-xl w-64 overflow-hidden"
+                style={{ top: pickerPos.top, left: pickerPos.left }}>
+                <div className="p-2 border-b border-border/50">
+                  <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-muted/60">
+                    <Search size={12} className="text-muted-foreground shrink-0" />
+                    <input
+                      autoFocus
+                      value={pickerSearch}
+                      onChange={e => setPickerSearch(e.target.value)}
+                      placeholder={t(lang, "searchModel")}
+                      className="bg-transparent text-xs text-foreground placeholder:text-muted-foreground/60 outline-none w-full"
+                    />
+                    {pickerSearch && (
+                      <button onClick={() => setPickerSearch("")}>
+                        <X size={11} className="text-muted-foreground/50 hover:text-muted-foreground" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="max-h-56 overflow-y-auto">
+                  <button
+                    onClick={() => { onModelChange(""); setPickerOpen(false) }}
+                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                      !selectedModel ? "bg-primary/15 text-primary" : "text-foreground hover:bg-accent"
+                    }`}>
+                    — auto —
+                  </button>
+                  {filteredModels.map(m => {
+                    const cd = cooldowns?.[m]
+                    return (
+                      <button key={m}
+                        onClick={() => { onModelChange(m); setPickerOpen(false) }}
+                        className={`w-full text-left px-3 py-2 text-xs transition-colors flex items-center gap-1.5 ${
+                          selectedModel === m ? "bg-primary/15 text-primary" : "text-foreground hover:bg-accent"
+                        }`}>
+                        <span className="truncate">{m}</span>
+                        {cd && <span className="text-muted-foreground/60 shrink-0">⏸ {fmtCooldown(cd)}</span>}
+                      </button>
+                    )
+                  })}
+                  {filteredModels.length === 0 && (
+                    <p className="px-3 py-4 text-xs text-muted-foreground text-center">{t(lang, "noModelFound")}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
+
         {modelClass !== "auto" && models.length === 0 && availProviders && (
           <span className="text-muted-foreground/50 text-xs">{t(lang, "noModels")}</span>
         )}

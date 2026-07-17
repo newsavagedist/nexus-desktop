@@ -8,7 +8,28 @@ import { t } from "../../i18n"
 
 interface Props { content: string; className?: string; lang?: Lang }
 
-type ContentPart = { type: "think"; text: string } | { type: "text"; text: string }
+type ContentPart =
+  | { type: "think"; text: string }
+  | { type: "attachment"; name: string; text: string }
+  | { type: "text"; text: string }
+
+function splitAttachments(text: string): ContentPart[] {
+  const parts: ContentPart[] = []
+  const regex = /<attachment name="([^"]*)">([\s\S]*?)<\/attachment>/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const before = text.slice(lastIndex, match.index).trim()
+      if (before) parts.push({ type: "text", text: before })
+    }
+    parts.push({ type: "attachment", name: match[1], text: match[2].trim() })
+    lastIndex = match.index + match[0].length
+  }
+  const remaining = text.slice(lastIndex).trim()
+  if (remaining) parts.push({ type: "text", text: remaining })
+  return parts
+}
 
 function parseContent(content: string): ContentPart[] {
   const parts: ContentPart[] = []
@@ -20,7 +41,7 @@ function parseContent(content: string): ContentPart[] {
   while ((match = regex.exec(content)) !== null) {
     if (match.index > lastIndex) {
       const text = content.slice(lastIndex, match.index).trim()
-      if (text) parts.push({ type: "text", text })
+      if (text) parts.push(...splitAttachments(text))
     }
     const think = match[1].trim()
     if (think) parts.push({ type: "think", text: think })
@@ -28,7 +49,7 @@ function parseContent(content: string): ContentPart[] {
   }
 
   const remaining = content.slice(lastIndex).trim()
-  if (remaining) parts.push({ type: "text", text: remaining })
+  if (remaining) parts.push(...splitAttachments(remaining))
 
   if (parts.length === 0) parts.push({ type: "text", text: content.trim() })
   return parts
@@ -49,6 +70,27 @@ function ThinkCollapsible({ content, lang }: { content: string; lang: Lang }) {
       {open && (
         <div className="px-3 pb-2 pt-1 border-t border-border/30 text-muted-foreground/70 whitespace-pre-wrap leading-relaxed font-mono text-[11px] max-h-64 overflow-y-auto">
           {content}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AttachmentCollapsible({ name, content, lang }: { name: string; content: string; lang: Lang }) {
+  const [open, setOpen] = React.useState(false)
+  return (
+    <div className="mb-3 text-xs rounded-xl border border-border/40 bg-muted/20 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <span>📎</span>
+        <span className="truncate">{name}</span>
+        <span className="ml-auto opacity-50">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-2 pt-1 border-t border-border/30 max-h-[400px] overflow-y-auto">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={makeMDComponents(lang)}>{content}</ReactMarkdown>
         </div>
       )}
     </div>
@@ -88,6 +130,8 @@ export default function Markdown({ content, className, lang: contentLang }: Prop
       {parts.map((part, i) =>
         part.type === "think"
           ? <ThinkCollapsible key={i} content={part.text} lang={activeLang} />
+          : part.type === "attachment"
+          ? <AttachmentCollapsible key={i} name={part.name} content={part.text} lang={activeLang} />
           : <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={makeMDComponents(activeLang)}>{part.text}</ReactMarkdown>
       )}
     </div>

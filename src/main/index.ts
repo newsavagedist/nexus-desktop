@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Menu, MenuItem } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerIpcHandlers } from './ipc/tools.js'
@@ -34,6 +34,26 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(ROOT, 'src', 'renderer', 'dist', 'index.html'))
   }
+
+  // Electron windows have no native right-click menu by default (unlike a
+  // regular browser) — build a minimal Copy/Cut/Paste/Select All one.
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const menu = new Menu()
+    if (params.isEditable) {
+      menu.append(new MenuItem({ label: 'Cortar', role: 'cut', enabled: params.editFlags.canCut }))
+      menu.append(new MenuItem({ label: 'Copiar', role: 'copy', enabled: params.editFlags.canCopy }))
+      menu.append(new MenuItem({ label: 'Colar', role: 'paste', enabled: params.editFlags.canPaste }))
+      menu.append(new MenuItem({ type: 'separator' }))
+      menu.append(new MenuItem({ label: 'Selecionar tudo', role: 'selectAll' }))
+    } else if (params.selectionText) {
+      menu.append(new MenuItem({ label: 'Copiar', role: 'copy' }))
+      menu.append(new MenuItem({ type: 'separator' }))
+      menu.append(new MenuItem({ label: 'Selecionar tudo', role: 'selectAll' }))
+    } else {
+      menu.append(new MenuItem({ label: 'Selecionar tudo', role: 'selectAll' }))
+    }
+    menu.popup()
+  })
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
     console.error(`[electron] Failed to load: ${errorDescription} (${errorCode})`)
