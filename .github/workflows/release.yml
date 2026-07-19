@@ -12,11 +12,37 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Create draft release
+      - uses: actions/checkout@v4
+
+      - name: Create or update draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" --repo newsavagedist/nexus-desktop --draft --title "${{ github.ref_name }}" --notes "" || echo "Release already exists, reusing it"
+          cat > release-notes.md <<'EOF'
+          ## Como instalar
+
+          Só precisas de um destes três, conforme o teu sistema:
+
+          | Sistema | Ficheiro |
+          |---|---|
+          | macOS (Apple Silicon) | `DaazNexus-*-arm64.dmg` |
+          | Windows | `DaazNexus-Setup-*.exe` |
+          | Linux | `DaazNexus-*.AppImage` (portátil) ou `nexus-desktop_*.deb` |
+
+          Os restantes ficheiros (`.blockmap`, `.yml`, e o `.zip` do Mac) não são para descarregar — são usados automaticamente pela app para aplicar atualizações em segundo plano.
+
+          No Mac, para evitar os avisos do Gatekeeper, usa o script `install-mac.command` (dentro de `extras.zip`) em vez de abrir o `.dmg` diretamente.
+          EOF
+          gh release create "${{ github.ref_name }}" --repo newsavagedist/nexus-desktop --draft --title "${{ github.ref_name }}" --notes-file release-notes.md \
+            || gh release edit "${{ github.ref_name }}" --repo newsavagedist/nexus-desktop --notes-file release-notes.md
+
+      - name: Package extras (Mac install script)
+        run: zip -j extras.zip install-mac.command
+
+      - name: Upload extras asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" extras.zip --repo newsavagedist/nexus-desktop --clobber
 
   build:
     needs: create-release
