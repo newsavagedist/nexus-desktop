@@ -31,18 +31,15 @@ jobs:
 
           Os restantes ficheiros (`.blockmap`, `.yml`, e o `.zip` do Mac) não são para descarregar — são usados automaticamente pela app para aplicar atualizações em segundo plano.
 
-          No Mac, para evitar os avisos do Gatekeeper, usa o script `install-mac.command` (dentro de `extras.zip`) em vez de abrir o `.dmg` diretamente.
+          No Mac, para evitar os avisos do Gatekeeper, usa o script `install-mac.command` em vez de abrir o `.dmg` diretamente.
           EOF
           gh release create "${{ github.ref_name }}" --repo newsavagedist/nexus-desktop --draft --title "${{ github.ref_name }}" --notes-file release-notes.md \
             || gh release edit "${{ github.ref_name }}" --repo newsavagedist/nexus-desktop --notes-file release-notes.md
 
-      - name: Package extras (Mac install script)
-        run: zip -j extras.zip install-mac.command
-
-      - name: Upload extras asset
+      - name: Upload Mac install script
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.ref_name }}" extras.zip --repo newsavagedist/nexus-desktop --clobber
+        run: gh release upload "${{ github.ref_name }}" install-mac.command --repo newsavagedist/nexus-desktop --clobber
 
   build:
     needs: create-release
