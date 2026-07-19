@@ -11,7 +11,23 @@ const ROOT = path.resolve(__dirname, '..', '..')
 const DEV_URL = 'http://localhost:5173'
 const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev')
 
+// Without this, launching the app a second time (double-clicking the Dock
+// icon while it's already running, opening it again from Spotlight, etc.)
+// spawns a fully separate process instead of focusing the existing window.
+// Both processes then read/write the SAME on-disk localStorage concurrently
+// — Chromium's storage backend isn't safe for that, so conversations bleed
+// into each other, permission prompts land in the wrong window, and streams
+// die mid-response. Reported on macOS as: a second "new chat" window shows
+// content from an unrelated, days-old conversation while it's still
+// generating, and that conversation's stream stops responding.
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+}
+
 let mainWindow: BrowserWindow | null = null
+
+if (gotLock) {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -87,6 +103,13 @@ function createWindow() {
   })
 }
 
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
+})
+
 app.whenReady().then(() => {
   registerIpcHandlers()
   initRemoteCatalog() // non-blocking: bundled catalog serves until remote/cache applies
@@ -105,3 +128,5 @@ app.on('activate', () => {
     createWindow()
   }
 })
+
+} // gotLock
