@@ -188,14 +188,18 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
   const [modelClass, setModelClass] = useState<ModelClassKey>("auto")
   const [strategy, setStrategy] = useState<string>("smartest")
   const [selectedModel, setSelectedModel] = useState("")
-  // Local tools (bash/filesystem) are opt-in — default OFF, persisted per user
+  // PLAN/BUILD mode — PLAN (default) is chat-only; BUILD attaches bash/filesystem
+  // tools. Persisted per user. Storage key kept as "toolsEnabled" for compatibility.
   const [toolsEnabled, setToolsEnabled] = useState<boolean>(() => localStorage.getItem("nexus.toolsEnabled") === "true")
   const [convId, setConvId] = useState<number | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [availProviders, setAvailProviders] = useState<Record<string, CategorizedProvider[]> | null>(null)
-  const [permReq, setPermReq] = useState<PermissionRequest | null>(null)
+  // Queue, not a single slot: several conversations can stream (and request
+  // tool permission) at the same time, so each needs its own visible prompt
+  // instead of the latest one silently replacing an earlier pending one.
+  const [permReqs, setPermReqs] = useState<PermissionRequest[]>([])
   const [updateState, setUpdateState] = useState<{ status: "available" | "downloading" | "ready" | "error"; version?: string; percent?: number; message?: string; phase?: "download" | "install" } | null>(null)
   const [artifact, setArtifact] = useState<Artifact | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
@@ -215,7 +219,9 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
   const cleanupResolvedRef = useRef<(() => void) | null>(null)
   const [pendingFiles, setPendingFiles] = useState<AttachedFile[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [contextSummarizing, setContextSummarizing] = useState(false)
+  // Per-conversation, not a single flag — two conversations can each be
+  // summarizing their own context at the same time.
+  const [summarizingConvIds, setSummarizingConvIds] = useState<Set<number>>(new Set())
   const [cooldowns, setCooldowns] = useState<Record<string, number>>({})
   const [modelSwitch, setModelSwitch] = useState<{ from: string; to: string } | null>(null)
   const lastResponseModelRef = useRef<string>("")
@@ -245,11 +251,13 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
   useEffect(() => {
     const nexus = (window as any).nexus
     if (nexus?.permissions?.onRequest) {
-      cleanupPermRef.current = nexus.permissions.onRequest((data: PermissionRequest) => setPermReq(data))
+      cleanupPermRef.current = nexus.permissions.onRequest((data: PermissionRequest) => {
+        setPermReqs(prev => prev.some(r => r.id === data.id) ? prev : [...prev, data])
+      })
     }
     if (nexus?.permissions?.onResolved) {
       cleanupResolvedRef.current = nexus.permissions.onResolved((id: string) => {
-        setPermReq(prev => (prev?.id === id ? null : prev))
+        setPermReqs(prev => prev.filter(r => r.id !== id))
       })
     }
     return () => { cleanupPermRef.current?.(); cleanupResolvedRef.current?.() }
@@ -565,10 +573,11 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
       const splitAt = Math.max(0, convoMsgs.length - CTX_KEEP_LAST)
       const toSummarize = convoMsgs.slice(0, splitAt)
       const toKeep = convoMsgs.slice(splitAt)
-      const summaryKey = `nexus-ctx-${convIdRef.current ?? 0}-${toSummarize.length}`
+      const sendCid = convIdRef.current
+      const summaryKey = `nexus-ctx-${sendCid ?? 0}-${toSummarize.length}`
       let summaryText = localStorage.getItem(summaryKey)
       if (!summaryText) {
-        setContextSummarizing(true)
+        if (sendCid !== null) setSummarizingConvIds(prev => new Set(prev).add(sendCid))
         try {
           const summaryPrompt = [
             { role: "system" as const, content: "Summarize the following conversation concisely, preserving key facts, decisions, and context needed for continuation. Output only the summary." },
@@ -578,7 +587,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
           summaryText = result.content
           if (summaryText) localStorage.setItem(summaryKey, summaryText)
         } catch { /* fall through with no summary */ } finally {
-          setContextSummarizing(false)
+          if (sendCid !== null) setSummarizingConvIds(prev => { const next = new Set(prev); next.delete(sendCid); return next })
         }
       }
       if (summaryText) {
@@ -657,7 +666,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
       const activeProject = activeProjectId ? projects.find(p => p.id === activeProjectId) : null
       const cancel = api.streamToProvider(
         ipcMessages,
-        { modelClass, model: selectedModel || undefined, strategy, temperature, workingDir: activeProject?.working_dir || undefined, toolsEnabled },
+        { modelClass, model: selectedModel || undefined, strategy, temperature, workingDir: activeProject?.working_dir || undefined, toolsEnabled, lang, convId: actualCid },
         (chunk) => {
           const s = activeStreamsRef.current.get(actualCid)
           if (!s) return
@@ -974,7 +983,7 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
             })() : (
               renderItems.map(item => (
                 <div key={item.msg.id} className="max-w-7xl mx-auto w-full">
-                  {item.msg.id < 0 && contextSummarizing ? (
+                  {item.msg.id < 0 && convId !== null && summarizingConvIds.has(convId) ? (
                     <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground animate-pulse">
                       <span>⏳</span>
                       <span>{lang === "pt" ? "A sumarizar contexto…" : "Summarizing context…"}</span>
@@ -1054,12 +1063,15 @@ export default function ChatPage({ onNavigate, colorMode, setColorMode, lang, se
       </div>
     )}
 
-    {permReq && (
+    {permReqs.length > 0 && (
       <PermissionModal
-        reqs={[permReq]}
+        reqs={permReqs.map(r => ({
+          ...r,
+          convTitle: r.convId != null ? convs.find(c => c.id === r.convId)?.title : undefined,
+        }))}
         onRespond={(req, granted, always) => {
           (window as any).nexus?.permissions?.respond?.(req.id, granted, always)
-          setPermReq(null)
+          setPermReqs(prev => prev.filter(r => r.id !== req.id))
         }}
       />
     )}

@@ -28,11 +28,12 @@ function createWindow() {
     },
   })
 
+  const indexPath = path.join(ROOT, 'src', 'renderer', 'dist', 'index.html')
   if (isDev) {
     mainWindow.loadURL(DEV_URL)
     mainWindow.webContents.openDevTools()
   } else {
-    mainWindow.loadFile(path.join(ROOT, 'src', 'renderer', 'dist', 'index.html'))
+    mainWindow.loadFile(indexPath)
   }
 
   // Electron windows have no native right-click menu by default (unlike a
@@ -55,8 +56,24 @@ function createWindow() {
     menu.popup()
   })
 
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
-    console.error(`[electron] Failed to load: ${errorDescription} (${errorCode})`)
+  // A blank/white window on load failure is undiagnosable from the user's
+  // side — they can't send us DevTools output over WhatsApp. Replace it with
+  // a visible error page carrying the exact code/path, so a broken install
+  // is at least self-reporting instead of silently white.
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    console.error(`[electron] Failed to load: ${errorDescription} (${errorCode}) url=${validatedURL}`)
+    if (!isMainFrame) return
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>DaazNexus</title></head>
+      <body style="font-family:-apple-system,sans-serif;background:#1a1625;color:#e5e0f5;padding:40px;line-height:1.5">
+        <h2>Não consegui carregar a aplicação</h2>
+        <p>Erro: <code>${errorDescription} (${errorCode})</code></p>
+        <p>URL: <code>${validatedURL}</code></p>
+        <p>Ficheiro esperado: <code>${indexPath}</code></p>
+        <p>Tenta reinstalar a partir do .dmg mais recente em
+          <a href="https://github.com/newsavagedist/nexus-desktop/releases/latest" style="color:#a78bfa">github.com/newsavagedist/nexus-desktop/releases/latest</a>.
+        </p>
+      </body></html>`
+    mainWindow?.loadURL(`data:text/html,${encodeURIComponent(html)}`)
   })
 
   mainWindow.webContents.on('console-message', (_event, _level, message) => {

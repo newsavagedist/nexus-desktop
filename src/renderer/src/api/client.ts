@@ -121,7 +121,7 @@ export const api = {
 
   streamToProvider: (
     messages: { role: string; content: string }[],
-    options: { modelClass?: string; model?: string; strategy?: string; temperature?: number; workingDir?: string; toolsEnabled?: boolean },
+    options: { modelClass?: string; model?: string; strategy?: string; temperature?: number; workingDir?: string; toolsEnabled?: boolean; lang?: string; convId?: number },
     onChunk: (chunk: string) => void,
     onDone: (result: { content: string; model: string }) => void,
     onError: (err: string) => void,

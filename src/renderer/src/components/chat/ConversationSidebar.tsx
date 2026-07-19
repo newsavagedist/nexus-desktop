@@ -1,4 +1,4 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Plus, X, Search, Pencil, FolderOpen, Folder, ChevronDown, ChevronRight, FileText } from "lucide-react"
 import type { Lang } from "../../i18n"
 import { t } from "../../i18n"
@@ -33,6 +33,10 @@ export default function ConversationSidebar({
   onProjectSelect, onProjectCreate, onProjectDelete, onProjectRename, onProjectSystemPrompt,
   onMoveConv,
 }: Props) {
+  const [appVersion, setAppVersion] = useState("")
+  useEffect(() => {
+    (window as any).nexus?.app?.getVersion?.().then(setAppVersion).catch(() => {})
+  }, [])
   const [search, setSearch] = useState("")
   const [editingConvId, setEditingConvId] = useState<number | null>(null)
   const [editConvValue, setEditConvValue] = useState("")
@@ -277,6 +281,12 @@ export default function ConversationSidebar({
           )
         })}
       </div>
+
+      {appVersion && (
+        <div className="shrink-0 px-3 py-2 border-t border-border/60 text-[10px] text-muted-foreground/60 select-none">
+          DaazNexus Desktop v{appVersion}
+        </div>
+      )}
     </>
   )
 

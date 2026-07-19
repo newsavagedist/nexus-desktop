@@ -20,6 +20,9 @@ export default function PermissionModal({ reqs, onRespond }: {
           <div key={req.id} data-perm-id={req.id}
             className={`perm-toast pointer-events-auto w-72 bg-card border rounded-xl shadow-2xl overflow-hidden ${isDangerous ? "border-red-700/50" : "border-amber-700/40"}`}>
             <div className="px-3 pt-3 pb-2">
+              {req.convTitle && (
+                <p className="text-[9px] uppercase tracking-wide text-muted-foreground/70 font-semibold mb-1 truncate">{req.convTitle}</p>
+              )}
               <div className="flex items-center gap-1.5 mb-1">
                 <span className="text-xs shrink-0">{isDangerous ? "🔥" : "⚠️"}</span>
                 <code className="text-xs font-mono font-bold text-foreground truncate">{req.action}</code>

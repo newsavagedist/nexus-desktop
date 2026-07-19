@@ -50,6 +50,7 @@ function matchRule(action: string, detail: string): 'allow' | 'deny' | 'ask' | n
 export async function checkOrRequestPermission(
   action: string, detail: string = '',
   timeoutMs = 60000,
+  context?: { convId?: number },
 ): Promise<boolean> {
   ensureLoaded()
 
@@ -64,6 +65,10 @@ export async function checkOrRequestPermission(
   if (defaultPolicy === 'allow') return true
   if (defaultPolicy === 'deny') return false
 
+  // Multiple conversations can be streaming (and requesting permission) at
+  // once — the id must be unique per request so concurrent prompts each get
+  // their own pending entry and their own timer, instead of clobbering one
+  // another.
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   return new Promise<boolean>((resolve) => {
     const timer = setTimeout(() => {
@@ -78,7 +83,7 @@ export async function checkOrRequestPermission(
 
     const win = BrowserWindow.getAllWindows()[0]
     if (win) {
-      win.webContents.send('nexus:permission:request', { id, action, detail })
+      win.webContents.send('nexus:permission:request', { id, action, detail, convId: context?.convId })
     } else {
       pending.delete(id)
       clearTimeout(timer)

@@ -110,6 +110,8 @@ export interface PermissionRequest {
   action: string
   detail: string
   dangerous?: boolean
+  convId?: number
+  convTitle?: string
 }
 
 export type ToolEventStatus = "pending" | "running" | "completed" | "failed"

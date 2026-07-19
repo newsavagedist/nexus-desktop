@@ -114,7 +114,10 @@ const translations = {
   classWorker:            { pt: "Trabalhador",             en: "Worker" },
   classLocal:             { pt: "Local",                   en: "Local" },
 
-  localTools:             { pt: "Ferramentas locais",      en: "Local tools" },
+  modePlan:               { pt: "PLAN",                    en: "PLAN" },
+  modeBuild:              { pt: "BUILD",                   en: "BUILD" },
+  modePlanTitle:          { pt: "Modo Plano — só conversa, sem tocar em ficheiros ou executar comandos. Clica para mudar para Construção.", en: "Plan mode — conversation only, no file or command access. Click to switch to Build." },
+  modeBuildTitle:         { pt: "Modo Construção — pode ler/escrever ficheiros e executar comandos. Clica para voltar a Plano.", en: "Build mode — can read/write files and run commands. Click to switch back to Plan." },
 
   strategySmartest:       { pt: "Inteligente",             en: "Smartest" },
   strategyFastest:        { pt: "Rápido",                  en: "Fastest" },

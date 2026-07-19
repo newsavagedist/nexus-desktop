@@ -160,18 +160,26 @@ export default function ModelSelector({ lang, modelClass, onModelClassChange, st
         {modelClass !== "auto" && models.length === 0 && availProviders && (
           <span className="text-muted-foreground/50 text-xs">{t(lang, "noModels")}</span>
         )}
-        {/* Local tools opt-in toggle — off by default; when off the model gets no bash/filesystem tools */}
+        {/* PLAN/BUILD mode switch — PLAN (default) is chat-only, no file/command
+            access; BUILD attaches the local bash/filesystem tools. Mirrors
+            OpenCode's Plan/Build modes so the distinction is obvious at a glance. */}
         <button
           type="button"
           onClick={() => onToolsToggle(!toolsEnabled)}
-          title={t(lang, "localTools")}
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs border transition-colors shrink-0 ${
-            toolsEnabled
-              ? "bg-primary/15 text-primary border-primary/40"
-              : "bg-secondary text-muted-foreground border-input"
+          title={t(lang, toolsEnabled ? "modeBuildTitle" : "modePlanTitle")}
+          className={`flex items-center gap-1 rounded-full p-0.5 text-[11px] font-semibold border transition-colors shrink-0 ${
+            toolsEnabled ? "border-primary/40" : "border-input"
           }`}>
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${toolsEnabled ? "bg-primary" : "bg-muted-foreground/40"}`} />
-          🛠 {t(lang, "localTools")}
+          <span className={`px-2 py-1 rounded-full transition-colors ${
+            !toolsEnabled ? "bg-secondary text-foreground" : "text-muted-foreground/50"
+          }`}>
+            📝 {t(lang, "modePlan")}
+          </span>
+          <span className={`px-2 py-1 rounded-full transition-colors ${
+            toolsEnabled ? "bg-primary/15 text-primary" : "text-muted-foreground/50"
+          }`}>
+            🔨 {t(lang, "modeBuild")}
+          </span>
         </button>
       </div>
 

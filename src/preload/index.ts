@@ -85,6 +85,9 @@ const api = {
   dialog: {
     openDir: (): Promise<string | null> => ipcRenderer.invoke('nexus:dialog:openDir'),
   },
+  app: {
+    getVersion: (): Promise<string> => ipcRenderer.invoke('nexus:app:getVersion'),
+  },
   ipc: {
     on: (channel: string, fn: (...args: any[]) => void) => {
       const handler = (_: any, ...args: any[]) => fn(_, ...args)
