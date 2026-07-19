@@ -11,6 +11,15 @@ const ROOT = path.resolve(__dirname, '..', '..')
 const DEV_URL = 'http://localhost:5173'
 const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev')
 
+// Safety net: an unhandled error in the main process otherwise shows
+// Electron's native "A JavaScript error occurred in the main process" dialog
+// — a scary, technical, English-only crash screen for a non-technical user,
+// and the process may not recover from it. Log it and keep the app alive
+// instead of letting it reach the user raw.
+process.on('uncaughtException', (err) => {
+  console.error('[electron] uncaught exception in main process:', err)
+})
+
 // Without this, launching the app a second time (double-clicking the Dock
 // icon while it's already running, opening it again from Spotlight, etc.)
 // spawns a fully separate process instead of focusing the existing window.
@@ -129,17 +138,22 @@ app.whenReady().then(() => {
   initRemoteCatalog() // non-blocking: bundled catalog serves until remote/cache applies
   createWindow()
   initAutoUpdater(isDev)
+
+  // Registered here, not at module scope: on macOS, 'activate' can fire
+  // before 'ready' on some launch paths (fresh installs especially), and
+  // `new BrowserWindow()` throws "Cannot create BrowserWindow before app is
+  // ready" if that happens — an uncaught exception that crashes the whole
+  // main process. A listener that doesn't exist yet can't fire early.
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow()
+    }
+  })
 })
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
-  }
-})
-
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow()
   }
 })
 
