@@ -3,7 +3,7 @@ import { resolveKey } from './keyVault.js'
 import { getClient, type ChatMessage, type ChatResult } from './providerClients.js'
 import { checkAndRecord } from './rateLimiter.js'
 import { recordAttempt } from './analytics.js'
-import { createExcel, createWord, createPowerpoint } from '../tools/office.js'
+import { createExcel, createWord, createPowerpoint, createPdf } from '../tools/office.js'
 
 const MAX_TOOL_ITERATIONS = 10
 const TIMEOUT = 30000
@@ -220,7 +220,7 @@ function toolResultsToMessages(results: [any, string][]): ChatMessage[] {
 // executing.
 const GATED_TOOLS = new Set([
   'bash', 'write_file', 'delete_file', 'create_dir', 'read_file', 'list_dir', 'file_info',
-  'create_excel', 'create_word', 'create_powerpoint',
+  'create_excel', 'create_word', 'create_powerpoint', 'create_pdf',
 ])
 
 async function executeToolCall(
@@ -345,6 +345,14 @@ async function executeToolCall(
         if (!ok) return 'Permission denied.'
       }
       return await createPowerpoint({ path: resolved, title: args.title, slides: args.slides })
+    }
+    case 'create_pdf': {
+      const resolved = resolve(args.path)
+      if (requestPermission) {
+        const ok = await requestPermission('create_pdf', `Create PDF: ${resolved}`)
+        if (!ok) return 'Permission denied.'
+      }
+      return await createPdf({ path: resolved, html: args.html, landscape: args.landscape })
     }
     default:
       return `Unknown tool: ${name}`

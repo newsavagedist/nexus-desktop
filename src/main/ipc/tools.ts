@@ -24,8 +24,8 @@ const PLAN_MODE_SYSTEM_PROMPT: Record<string, string> = {
 // Spelling this out, and telling the model to trust its own tool results
 // over that instinct, measurably reduces that failure mode.
 const BUILD_MODE_SYSTEM_PROMPT: Record<string, string> = {
-  pt: 'Estás em modo BUILD no DaazNexus Desktop, uma aplicação de secretária (Electron) com acesso real ao computador do utilizador — não é um sandbox nem uma simulação. As ferramentas bash, read_file, write_file, list_dir, create_dir, delete_file, file_info, create_excel, create_word e create_powerpoint executam mesmo no disco e terminal do utilizador, mediante permissão explícita já concedida por ele. Para pedidos de Excel/Word/PowerPoint usa sempre create_excel/create_word/create_powerpoint (produzem .xlsx/.docx/.pptx reais e abríveis no Office) — nunca escrevas esse conteúdo como texto simples ou CSV a fingir que é um desses formatos. Quando chamas uma ferramenta e recebes um resultado de sucesso (ex: "File written: /caminho"), isso significa que a ação REALMENTE aconteceu — confia nesse resultado e não digas ao utilizador que não tens acesso ao sistema de ficheiros, que estás num "ambiente isolado" ou que "simulaste" a ação. Se o resultado da ferramenta indicar um erro, reporta esse erro específico, não uma explicação genérica de falta de acesso.',
-  en: 'You are in BUILD mode in DaazNexus Desktop, a desktop (Electron) application with real access to the user\'s computer — this is not a sandbox or a simulation. The bash, read_file, write_file, list_dir, create_dir, delete_file, file_info, create_excel, create_word and create_powerpoint tools genuinely execute on the user\'s disk and shell, with permission already explicitly granted by them. For Excel/Word/PowerPoint requests always use create_excel/create_word/create_powerpoint (they produce real .xlsx/.docx/.pptx files openable in Office) — never write that content as plain text or CSV pretending it is one of those formats. When you call a tool and get back a success result (e.g. "File written: /path"), that means the action REALLY happened — trust that result, and do not tell the user you lack filesystem access, that you\'re in an "isolated environment", or that you "simulated" the action. If a tool result reports an error, relay that specific error, not a generic no-access disclaimer.',
+  pt: 'Estás em modo BUILD no DaazNexus Desktop, uma aplicação de secretária (Electron) com acesso real ao computador do utilizador — não é um sandbox nem uma simulação. As ferramentas bash, read_file, write_file, list_dir, create_dir, delete_file, file_info, create_excel, create_word, create_powerpoint e create_pdf executam mesmo no disco e terminal do utilizador, mediante permissão explícita já concedida por ele. Para pedidos de Excel/Word/PowerPoint usa sempre create_excel/create_word/create_powerpoint (produzem .xlsx/.docx/.pptx reais e abríveis no Office) — nunca escrevas esse conteúdo como texto simples ou CSV a fingir que é um desses formatos. Para PDF usa create_pdf, escrevendo HTML/CSS normal como se fosse uma página web (o motor de renderização real da app trata da conversão). Quando chamas uma ferramenta e recebes um resultado de sucesso (ex: "File written: /caminho"), isso significa que a ação REALMENTE aconteceu — confia nesse resultado e não digas ao utilizador que não tens acesso ao sistema de ficheiros, que estás num "ambiente isolado" ou que "simulaste" a ação. Se o resultado da ferramenta indicar um erro, reporta esse erro específico, não uma explicação genérica de falta de acesso.',
+  en: 'You are in BUILD mode in DaazNexus Desktop, a desktop (Electron) application with real access to the user\'s computer — this is not a sandbox or a simulation. The bash, read_file, write_file, list_dir, create_dir, delete_file, file_info, create_excel, create_word, create_powerpoint and create_pdf tools genuinely execute on the user\'s disk and shell, with permission already explicitly granted by them. For Excel/Word/PowerPoint requests always use create_excel/create_word/create_powerpoint (they produce real .xlsx/.docx/.pptx files openable in Office) — never write that content as plain text or CSV pretending it is one of those formats. For PDF use create_pdf, writing normal HTML/CSS as if building a webpage (the app\'s real rendering engine handles the conversion). When you call a tool and get back a success result (e.g. "File written: /path"), that means the action REALLY happened — trust that result, and do not tell the user you lack filesystem access, that you\'re in an "isolated environment", or that you "simulated" the action. If a tool result reports an error, relay that specific error, not a generic no-access disclaimer.',
 }
 
 function withModeSystemPrompt(messages: ChatMessage[], toolsEnabled: boolean, lang?: string): ChatMessage[] {
@@ -222,6 +222,22 @@ const DESKTOP_TOOLS = [
           },
         },
         required: ['path', 'slides'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'create_pdf',
+      description: 'Create a real .pdf file by rendering HTML/CSS through the app\'s built-in browser engine — write normal HTML with inline <style> as if building a webpage (tables, colors, layout, images as base64 data URIs). Use this instead of writing raw text when the user asks for a PDF, and prefer it over create_word for anything that needs precise visual layout.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Where to save the .pdf file.' },
+          html: { type: 'string', description: 'A full HTML document (can include a <style> block) to render as the PDF content.' },
+          landscape: { type: 'boolean', description: 'Set true for landscape orientation. Defaults to portrait.' },
+        },
+        required: ['path', 'html'],
       },
     },
   },

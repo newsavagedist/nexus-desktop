@@ -162,6 +162,38 @@ export async function createPowerpoint({ path, title, slides }: CreatePptArgs): 
   return `PowerPoint presentation written: ${path} (${slides.length} slide(s))`
 }
 
+// ── PDF (HTML → PDF via Electron's bundled Chromium) ────────
+//
+// PDFs are a layout format, not a data format like the other three — the
+// model is far better at writing free-form HTML/CSS than filling a rigid
+// content-block schema, and Electron already ships a full browser engine.
+// No extra dependency: render the model's HTML off-screen and print it.
+
+export interface CreatePdfArgs {
+  path: string
+  html: string
+  landscape?: boolean
+}
+
+export async function createPdf({ path, html, landscape }: CreatePdfArgs): Promise<string> {
+  const { BrowserWindow } = await import('electron')
+  const win = new BrowserWindow({ show: false, webPreferences: { offscreen: true } })
+  try {
+    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+    const buffer = await win.webContents.printToPDF({
+      printBackground: true,
+      landscape: !!landscape,
+      pageSize: 'A4',
+      preferCSSPageSize: true,
+    })
+    await fs.mkdir(pathDirname(path), { recursive: true })
+    await fs.writeFile(path, buffer)
+    return `PDF written: ${path}`
+  } finally {
+    win.destroy()
+  }
+}
+
 function pathDirname(p: string): string {
   const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
   return idx === -1 ? '.' : p.slice(0, idx)
