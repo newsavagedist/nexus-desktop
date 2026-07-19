@@ -126,7 +126,7 @@ export class OpenAIClient extends BaseClient {
         body: JSON.stringify(body),
       })
       if (!resp.ok) {
-        const err = new Error(`HTTP ${resp.status}`) as any
+        const err = new Error(`${model}: HTTP ${resp.status}`) as any
         err.status = resp.status
         err.response = resp
         throw err
@@ -188,7 +188,7 @@ export class OpenAIClient extends BaseClient {
       body: JSON.stringify(body),
     })
     if (!resp.ok) {
-      const err = new Error(`HTTP ${resp.status}`) as any
+      const err = new Error(`${model}: HTTP ${resp.status}`) as any
       err.status = resp.status
       err.response = resp
       throw err
@@ -335,7 +335,7 @@ export class GoogleClient extends BaseClient {
         body: JSON.stringify(payload),
       })
       if (!resp.ok) {
-        const err = new Error(`HTTP ${resp.status}`) as any
+        const err = new Error(`${model}: HTTP ${resp.status}`) as any
         err.status = resp.status
         err.response = resp
         throw err
@@ -382,7 +382,7 @@ export class GoogleClient extends BaseClient {
       body: JSON.stringify(payload),
     })
     if (!resp.ok) {
-      const err = new Error(`HTTP ${resp.status}`) as any
+      const err = new Error(`${model}: HTTP ${resp.status}`) as any
       err.status = resp.status
       err.response = resp
       throw err

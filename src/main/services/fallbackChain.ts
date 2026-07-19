@@ -90,7 +90,7 @@ async function executeToolLoop(
   const seenCalls = seenCounts ?? new Map<string, number>()
   let result = await Promise.race([
     client.chat(apiKey, model, workingMsgs, { maxTokens, tools }),
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT)),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${model}: timeout after ${TIMEOUT / 1000}s`)), TIMEOUT)),
   ])
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
@@ -130,7 +130,7 @@ async function executeToolLoop(
 
     result = await Promise.race([
       client.chat(apiKey, model, workingMsgs, { maxTokens, tools }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT)),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${model}: timeout after ${TIMEOUT / 1000}s (mid tool-loop, iteration ${iteration + 1})`)), TIMEOUT)),
     ])
   }
 
@@ -602,6 +602,8 @@ export async function* routeWithFallbackStream(
     fbOrder = chosen.length ? [modelClass] : [modelClass, 'local']
   }
 
+  const lastErrors = new Map<string, string>()
+
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     for (const attemptClass of fbOrder) {
       let models = getModelsByClass(attemptClass)
@@ -650,6 +652,7 @@ export async function* routeWithFallbackStream(
           if (holdFirst) {
             recordAttempt(provider.id, m, false, 0, 'empty stream')
             markCooldown(m, 10)
+            lastErrors.set(m, 'empty stream')
             continue
           }
 
@@ -662,14 +665,20 @@ export async function* routeWithFallbackStream(
           if (holdFirst) {
             recordAttempt(provider.id, m, false, 0, err.message?.slice(0, 100))
             markCooldown(m, 15)
+            lastErrors.set(m, err?.message?.slice(0, 100) || String(err))
             continue
           } else {
-            throw err
+            // Reaches the user's chat as-is (finalize() shows it verbatim as
+            // "❌ <message>") — bare "timeout" or "HTTP 503" with no model
+            // name is undiagnosable, so always tag it if it isn't already.
+            const msg: string = err?.message || String(err)
+            throw msg.startsWith(m) ? err : new Error(`${m}: ${msg}`)
           }
         }
       }
     }
   }
 
-  throw new Error(`All providers failed for class "${modelClass}" after ${MAX_RETRIES} attempts.`)
+  const details = Array.from(lastErrors.entries()).map(([mdl, e]) => `${mdl}: ${e}`).join('; ')
+  throw new Error(`All providers failed for class "${modelClass}" after ${MAX_RETRIES} attempts.${details ? ` Errors: ${details}` : ''}`)
 }
