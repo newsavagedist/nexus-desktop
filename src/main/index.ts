@@ -72,6 +72,20 @@ function createWindow() {
     menu.popup()
   })
 
+  // DevTools only auto-opens in dev builds — production installs have no
+  // menu bar entry for it either, so without this there is no way for a
+  // non-technical user to get us a console log. Cmd+Option+I (mac) /
+  // Ctrl+Shift+I (win/linux) / F12 works in every build.
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (input.type !== 'keyDown') return
+    const key = input.key.toLowerCase()
+    const isDevToolsShortcut =
+      (input.meta && input.alt && key === 'i') ||
+      (input.control && input.shift && key === 'i') ||
+      key === 'f12'
+    if (isDevToolsShortcut) mainWindow?.webContents.toggleDevTools()
+  })
+
   // A blank/white window on load failure is undiagnosable from the user's
   // side — they can't send us DevTools output over WhatsApp. Replace it with
   // a visible error page carrying the exact code/path, so a broken install
