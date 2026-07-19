@@ -24,8 +24,8 @@ const PLAN_MODE_SYSTEM_PROMPT: Record<string, string> = {
 // Spelling this out, and telling the model to trust its own tool results
 // over that instinct, measurably reduces that failure mode.
 const BUILD_MODE_SYSTEM_PROMPT: Record<string, string> = {
-  pt: 'Estás em modo BUILD no DaazNexus Desktop, uma aplicação de secretária (Electron) com acesso real ao computador do utilizador — não é um sandbox nem uma simulação. As ferramentas bash, read_file, write_file, list_dir, create_dir, delete_file e file_info executam mesmo no disco e terminal do utilizador, mediante permissão explícita já concedida por ele. Quando chamas uma ferramenta e recebes um resultado de sucesso (ex: "File written: /caminho"), isso significa que a ação REALMENTE aconteceu — confia nesse resultado e não digas ao utilizador que não tens acesso ao sistema de ficheiros, que estás num "ambiente isolado" ou que "simulaste" a ação. Se o resultado da ferramenta indicar um erro, reporta esse erro específico, não uma explicação genérica de falta de acesso.',
-  en: 'You are in BUILD mode in DaazNexus Desktop, a desktop (Electron) application with real access to the user\'s computer — this is not a sandbox or a simulation. The bash, read_file, write_file, list_dir, create_dir, delete_file and file_info tools genuinely execute on the user\'s disk and shell, with permission already explicitly granted by them. When you call a tool and get back a success result (e.g. "File written: /path"), that means the action REALLY happened — trust that result, and do not tell the user you lack filesystem access, that you\'re in an "isolated environment", or that you "simulated" the action. If a tool result reports an error, relay that specific error, not a generic no-access disclaimer.',
+  pt: 'Estás em modo BUILD no DaazNexus Desktop, uma aplicação de secretária (Electron) com acesso real ao computador do utilizador — não é um sandbox nem uma simulação. As ferramentas bash, read_file, write_file, list_dir, create_dir, delete_file, file_info, create_excel, create_word e create_powerpoint executam mesmo no disco e terminal do utilizador, mediante permissão explícita já concedida por ele. Para pedidos de Excel/Word/PowerPoint usa sempre create_excel/create_word/create_powerpoint (produzem .xlsx/.docx/.pptx reais e abríveis no Office) — nunca escrevas esse conteúdo como texto simples ou CSV a fingir que é um desses formatos. Quando chamas uma ferramenta e recebes um resultado de sucesso (ex: "File written: /caminho"), isso significa que a ação REALMENTE aconteceu — confia nesse resultado e não digas ao utilizador que não tens acesso ao sistema de ficheiros, que estás num "ambiente isolado" ou que "simulaste" a ação. Se o resultado da ferramenta indicar um erro, reporta esse erro específico, não uma explicação genérica de falta de acesso.',
+  en: 'You are in BUILD mode in DaazNexus Desktop, a desktop (Electron) application with real access to the user\'s computer — this is not a sandbox or a simulation. The bash, read_file, write_file, list_dir, create_dir, delete_file, file_info, create_excel, create_word and create_powerpoint tools genuinely execute on the user\'s disk and shell, with permission already explicitly granted by them. For Excel/Word/PowerPoint requests always use create_excel/create_word/create_powerpoint (they produce real .xlsx/.docx/.pptx files openable in Office) — never write that content as plain text or CSV pretending it is one of those formats. When you call a tool and get back a success result (e.g. "File written: /path"), that means the action REALLY happened — trust that result, and do not tell the user you lack filesystem access, that you\'re in an "isolated environment", or that you "simulated" the action. If a tool result reports an error, relay that specific error, not a generic no-access disclaimer.',
 }
 
 function withModeSystemPrompt(messages: ChatMessage[], toolsEnabled: boolean, lang?: string): ChatMessage[] {
@@ -131,6 +131,97 @@ const DESKTOP_TOOLS = [
           path: { type: 'string', description: 'Path to the file or directory.' },
         },
         required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'create_excel',
+      description: 'Create a real .xlsx Excel workbook with one or more sheets, bold styled headers, and auto-sized columns. Use this instead of writing raw text when the user asks for a spreadsheet.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Where to save the .xlsx file, e.g. /Users/name/Documents/report.xlsx.' },
+          sheets: {
+            type: 'array',
+            description: 'One entry per worksheet tab.',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Sheet tab name (max 31 chars).' },
+                headers: { type: 'array', items: { type: 'string' }, description: 'Optional bold header row.' },
+                rows: {
+                  type: 'array',
+                  description: 'Data rows; each row is an array of cell values (string, number, boolean, or null).',
+                  items: { type: 'array', items: {} },
+                },
+              },
+              required: ['name', 'rows'],
+            },
+          },
+        },
+        required: ['path', 'sheets'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'create_word',
+      description: 'Create a real .docx Word document from structured content (headings, paragraphs, bullet/numbered lists, tables). Use this instead of writing raw text when the user asks for a Word document or report.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Where to save the .docx file.' },
+          title: { type: 'string', description: 'Optional document title, rendered as a large title heading at the top.' },
+          blocks: {
+            type: 'array',
+            description: 'Ordered content blocks that make up the document body.',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', description: 'One of: heading1, heading2, heading3, paragraph, bullet, numbered, table.' },
+                text: { type: 'string', description: 'Text content — required for every type except table.' },
+                rows: {
+                  type: 'array',
+                  description: 'Only for type "table": array of rows, each an array of cell strings.',
+                  items: { type: 'array', items: { type: 'string' } },
+                },
+                headerRow: { type: 'boolean', description: 'Only for type "table": bold-style the first row as a header.' },
+              },
+              required: ['type'],
+            },
+          },
+        },
+        required: ['path', 'blocks'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'create_powerpoint',
+      description: 'Create a real .pptx PowerPoint presentation with a title slide and content slides (title + bullet points + optional speaker notes). Use this instead of writing raw text when the user asks for a presentation or slides.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Where to save the .pptx file.' },
+          title: { type: 'string', description: 'Optional title-slide text, shown centered on its own opening slide.' },
+          slides: {
+            type: 'array',
+            description: 'Content slides, in order.',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string', description: 'Slide heading.' },
+                bullets: { type: 'array', items: { type: 'string' }, description: 'Bullet points for this slide.' },
+                notes: { type: 'string', description: 'Optional speaker notes, not visible on the slide itself.' },
+              },
+            },
+          },
+        },
+        required: ['path', 'slides'],
       },
     },
   },

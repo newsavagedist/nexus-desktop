@@ -3,6 +3,7 @@ import { resolveKey } from './keyVault.js'
 import { getClient, type ChatMessage, type ChatResult } from './providerClients.js'
 import { checkAndRecord } from './rateLimiter.js'
 import { recordAttempt } from './analytics.js'
+import { createExcel, createWord, createPowerpoint } from '../tools/office.js'
 
 const MAX_TOOL_ITERATIONS = 10
 const TIMEOUT = 30000
@@ -219,6 +220,7 @@ function toolResultsToMessages(results: [any, string][]): ChatMessage[] {
 // executing.
 const GATED_TOOLS = new Set([
   'bash', 'write_file', 'delete_file', 'create_dir', 'read_file', 'list_dir', 'file_info',
+  'create_excel', 'create_word', 'create_powerpoint',
 ])
 
 async function executeToolCall(
@@ -319,6 +321,30 @@ async function executeToolCall(
     }
     case 'web_search': {
       return `[web_search:${args.query}] mock — implement search later`
+    }
+    case 'create_excel': {
+      const resolved = resolve(args.path)
+      if (requestPermission) {
+        const ok = await requestPermission('create_excel', `Create Excel workbook: ${resolved}`)
+        if (!ok) return 'Permission denied.'
+      }
+      return await createExcel({ path: resolved, sheets: args.sheets })
+    }
+    case 'create_word': {
+      const resolved = resolve(args.path)
+      if (requestPermission) {
+        const ok = await requestPermission('create_word', `Create Word document: ${resolved}`)
+        if (!ok) return 'Permission denied.'
+      }
+      return await createWord({ path: resolved, title: args.title, blocks: args.blocks })
+    }
+    case 'create_powerpoint': {
+      const resolved = resolve(args.path)
+      if (requestPermission) {
+        const ok = await requestPermission('create_powerpoint', `Create PowerPoint presentation: ${resolved}`)
+        if (!ok) return 'Permission denied.'
+      }
+      return await createPowerpoint({ path: resolved, title: args.title, slides: args.slides })
     }
     default:
       return `Unknown tool: ${name}`
