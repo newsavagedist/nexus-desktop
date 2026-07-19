@@ -4,7 +4,7 @@ copyright: Copyright (C) 2025 DaazLabs
 
 publish:
   provider: github
-  owner: newsavagedist
+  owner: daazlabs
   repo: nexus-desktop
   private: false
 

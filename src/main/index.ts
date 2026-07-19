@@ -109,7 +109,7 @@ function createWindow() {
         <p>URL: <code>${validatedURL}</code></p>
         <p>Ficheiro esperado: <code>${indexPath}</code></p>
         <p>Tenta reinstalar a partir do .dmg mais recente em
-          <a href="https://github.com/newsavagedist/nexus-desktop/releases/latest" style="color:#a78bfa">github.com/newsavagedist/nexus-desktop/releases/latest</a>.
+          <a href="https://github.com/daazlabs/nexus-desktop/releases/latest" style="color:#a78bfa">github.com/daazlabs/nexus-desktop/releases/latest</a>.
         </p>
       </body></html>`
     mainWindow?.loadURL(`data:text/html,${encodeURIComponent(html)}`)

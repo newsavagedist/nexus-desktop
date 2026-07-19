@@ -20,7 +20,7 @@ DMG=$(ls -t "$DOWNLOADS"/DaazNexus-*.dmg 2>/dev/null | head -1)
 if [ -z "$DMG" ]; then
   echo "Não encontrei nenhum ficheiro DaazNexus-*.dmg em $DOWNLOADS"
   echo "Descarrega primeiro a última versão em:"
-  echo "  https://github.com/newsavagedist/nexus-desktop/releases/latest"
+  echo "  https://github.com/daazlabs/nexus-desktop/releases/latest"
   read -p "Prime Enter para sair..."
   exit 1
 fi

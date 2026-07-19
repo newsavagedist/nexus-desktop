@@ -6,7 +6,7 @@ Chat com 30+ modelos de IA num único app. Versão desktop do [chat.daazlabs.com
 
 ## Download
 
-**[→ Descarregar a última versão](https://github.com/newsavagedist/nexus-desktop/releases/latest)**
+**[→ Descarregar a última versão](https://github.com/daazlabs/nexus-desktop/releases/latest)**
 
 | Sistema | Ficheiro |
 |---------|----------|
@@ -76,8 +76,8 @@ O macOS vai lembrar a tua escolha e não volta a pedir.
 
 Como o macOS nunca completa o update automático sozinho (app não assinada), a forma mais rápida de atualizar é:
 
-1. Descarrega o `.dmg` da [última versão](https://github.com/newsavagedist/nexus-desktop/releases/latest) — fica em `~/Downloads`
-2. Descarrega o [`install-mac.command`](https://raw.githubusercontent.com/newsavagedist/nexus-desktop/main/install-mac.command)
+1. Descarrega o `.dmg` da [última versão](https://github.com/daazlabs/nexus-desktop/releases/latest) — fica em `~/Downloads`
+2. Descarrega o [`install-mac.command`](https://raw.githubusercontent.com/daazlabs/nexus-desktop/main/install-mac.command)
 3. Dá duplo-clique no `install-mac.command` no Finder
 
 O script remove a quarentena, substitui a versão antiga em `/Applications` e pergunta se queres abrir o app — tudo automático, sem arrastar nada.
@@ -112,7 +112,7 @@ Para modelos locais, instala [Ollama](https://ollama.com/download) e corre `olla
 ## Construir a partir do código
 
 ```bash
-git clone https://github.com/newsavagedist/nexus-desktop.git
+git clone https://github.com/daazlabs/nexus-desktop.git
 cd nexus-desktop
 npm install
 cd src/renderer && npm install && cd ../..

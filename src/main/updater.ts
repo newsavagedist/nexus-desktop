@@ -39,7 +39,7 @@ export function initAutoUpdater(isDev: boolean) {
     // what happened and tell the user instead of leaving the button dead.
     setTimeout(() => {
       send('nexus:update:error', {
-        message: 'Não foi possível instalar automaticamente (a app não está assinada digitalmente no macOS). Fecha a app e reinstala manualmente com o .dmg mais recente em github.com/newsavagedist/nexus-desktop/releases/latest.',
+        message: 'Não foi possível instalar automaticamente (a app não está assinada digitalmente no macOS). Fecha a app e reinstala manualmente com o .dmg mais recente em github.com/daazlabs/nexus-desktop/releases/latest.',
         phase: 'install',
       })
     }, 6000)
