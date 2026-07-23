@@ -27,6 +27,19 @@ function faqContent(lang: Lang) {
       ),
     },
     {
+      q: "How do I connect GitHub or Google Drive (Connectors)?",
+      a: (
+        <>
+          <p className="mb-2">Go to ⚙ Settings → CONNECTORS tab. Each connector uses your own account — nothing is shared with other users.</p>
+          <ul className="list-disc list-inside space-y-1.5 text-neutral-400">
+            <li><strong className="text-white">GitHub:</strong> paste a Personal Access Token (there's a link to create one with the right permissions already filled in) and click Connect.</li>
+            <li><strong className="text-white">Google Drive:</strong> click "Connect with Google", sign in with your Google account in the window that opens, and approve access. That's it — the assistant can then read your Drive files when you ask it to, in BUILD mode.</li>
+          </ul>
+          <p className="mt-2 text-neutral-500 text-xs">If a connector shows "not configured yet", that's a one-time setup pending on the app's admin side — ask whoever manages your DaazNexus instance.</p>
+        </>
+      ),
+    },
+    {
       q: "What do Smartest, Fastest and Manual mean?",
       a: (
         <>
@@ -123,6 +136,19 @@ function faqContent(lang: Lang) {
             <li><strong className="text-white">GitHub Models:</strong> github.com/marketplace/models — grátis com conta GitHub</li>
             <li><strong className="text-white">Mistral:</strong> console.mistral.ai — plano experimental gratuito</li>
           </ul>
+        </>
+      ),
+    },
+    {
+      q: "Como ligo o GitHub ou o Google Drive (Conectores)?",
+      a: (
+        <>
+          <p className="mb-2">Vai a ⚙ Definições → separador CONNECTORS. Cada conector usa a tua própria conta — nada é partilhado com outros utilizadores.</p>
+          <ul className="list-disc list-inside space-y-1.5 text-neutral-400">
+            <li><strong className="text-white">GitHub:</strong> cola um Personal Access Token (há um link para criares um já com as permissões certas) e clica em Ligar.</li>
+            <li><strong className="text-white">Google Drive:</strong> clica em "Ligar com Google", entra com a tua conta Google na janela que abre, e aprova o acesso. É tudo — o assistente passa a poder ler os teus ficheiros do Drive quando lhe pedires, em modo BUILD.</li>
+          </ul>
+          <p className="mt-2 text-neutral-500 text-xs">Se um conector aparecer como "ainda não configurado", é uma configuração pendente do lado da administração da app — pergunta a quem gere a tua instância do DaazNexus.</p>
         </>
       ),
     },

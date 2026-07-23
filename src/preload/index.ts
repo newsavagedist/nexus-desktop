@@ -24,6 +24,13 @@ const api = {
       return () => ipcRenderer.removeListener('nexus:permission:resolved', handler)
     },
   },
+  connectors: {
+    list: () => ipcRenderer.invoke('nexus:connectors:list'),
+    setToken: (connectorId: string, token: string) =>
+      ipcRenderer.invoke('nexus:connectors:setToken', connectorId, token),
+    disconnect: (connectorId: string) => ipcRenderer.invoke('nexus:connectors:disconnect', connectorId),
+    connectOAuth: (connectorId: string) => ipcRenderer.invoke('nexus:connectors:connectOAuth', connectorId),
+  },
   providers: {
     list: () => ipcRenderer.invoke('nexus:providers:list'),
     modelsByClass: (modelClass: string) => ipcRenderer.invoke('nexus:providers:modelsByClass', modelClass),

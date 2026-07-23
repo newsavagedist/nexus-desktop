@@ -85,7 +85,13 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      {permModal}
+      {/* No {permModal} here: ChatPage renders its own PermissionModal (a
+          queue that supports several concurrent requests and clears itself
+          on "resolved"). Showing this simpler one too meant both received
+          the same request and both stayed mounted — clicking one resolved
+          it on the backend, but the other lingered with stale state and,
+          if clicked, sent a second (harmless but noisy) resolve for an
+          already-resolved id. */}
       <ChatPage
         onNavigate={setPage}
         colorMode={colorMode}

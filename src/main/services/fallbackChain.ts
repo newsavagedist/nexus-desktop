@@ -8,6 +8,12 @@ import { createExcel, createWord, createPowerpoint, createPdf } from '../tools/o
 
 const MAX_TOOL_ITERATIONS = 10
 const TIMEOUT = 30000
+// The call that produces the model's answer AFTER a tool already ran (e.g.
+// after an MCP round-trip to GitHub) carries a bigger context (the tool
+// result) and has already paid the tool's own latency — 30s is tuned for a
+// fresh, tool-free first response and was observed timing out here on slower
+// free models purely because of that extra load, not a real hang.
+const TOOL_CONTINUATION_TIMEOUT = 60000
 const MAX_RETRIES = 20
 const EMPTY_CONTENT_RETRIES = 2
 
@@ -100,11 +106,12 @@ async function executeToolLoop(
   notifyTool?: ToolNotify,
   workingDir?: string,
   seenCounts?: Map<string, number>,
+  firstCallTimeout: number = TIMEOUT,
 ): Promise<[ChatResult, ChatMessage[]]> {
   const seenCalls = seenCounts ?? new Map<string, number>()
   let result = await Promise.race([
     client.chat(apiKey, model, workingMsgs, { maxTokens, tools }),
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${model}: timeout after ${TIMEOUT / 1000}s`)), TIMEOUT)),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${model}: timeout after ${firstCallTimeout / 1000}s`)), firstCallTimeout)),
   ])
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
@@ -204,7 +211,7 @@ async function runToolsAndContinue(
     const sig = toolCallSignature(tc)
     seenCounts.set(sig, (seenCounts.get(sig) || 0) + 1)
   }
-  const [result] = await executeToolLoop(client, apiKey, model, workingMsgs, maxTokens, tools.length ? tools : undefined, requestPermission, isCancelled, notifyTool, workingDir, seenCounts)
+  const [result] = await executeToolLoop(client, apiKey, model, workingMsgs, maxTokens, tools.length ? tools : undefined, requestPermission, isCancelled, notifyTool, workingDir, seenCounts, TOOL_CONTINUATION_TIMEOUT)
   return result.content || ''
 }
 
@@ -246,9 +253,17 @@ async function executeToolCall(
   const name = tc.function.name
   const args = JSON.parse(tc.function.arguments || '{}')
 
-  // Unconditional permission gate: no callback -> no execution.
-  if (GATED_TOOLS.has(name) && !requestPermission) {
+  // Unconditional permission gate: no callback -> no execution. MCP tools
+  // (GitHub/Drive/Gmail) are treated as dangerous by default alongside the
+  // native gated tools — an arbitrary third-party MCP server has no known
+  // blast radius, so it never gets a pass.
+  if ((GATED_TOOLS.has(name) || name.startsWith('mcp__')) && !requestPermission) {
     return 'Permission denied.'
+  }
+
+  if (name.startsWith('mcp__')) {
+    const { dispatchMcpCall } = await import('./mcpConnectors.js')
+    return await dispatchMcpCall(name, args, requestPermission)
   }
 
   // Resolve a file path: absolute paths are kept as-is; relative paths are
@@ -492,7 +507,12 @@ export async function routeWithFallback(
         continue
       }
       if (hasImages) models = prioritizeVision(models)
-      models = sortByStrategy(models, strategy)
+      // Tool use already pays for a permission wait + the tool's own round-trip
+      // (e.g. a GitHub API call) before the model even starts its final
+      // answer — pairing that with a big/slow model (e.g. a 675B one with
+      // speedScore 3) is what pushed the timeout observed in testing.
+      // Latency budget matters far more than raw intelligence here.
+      models = sortByStrategy(models, tools?.length ? 'fastest' : strategy)
 
       for (const m of models) {
         if (isOnCooldown(m)) continue
@@ -628,7 +648,12 @@ export async function* routeWithFallbackStream(
       if (tools?.length) models = filterToolCapable(models)
       if (!models.length) continue
       if (hasImages) models = prioritizeVision(models)
-      models = sortByStrategy(models, strategy)
+      // Tool use already pays for a permission wait + the tool's own round-trip
+      // (e.g. a GitHub API call) before the model even starts its final
+      // answer — pairing that with a big/slow model (e.g. a 675B one with
+      // speedScore 3) is what pushed the timeout observed in testing.
+      // Latency budget matters far more than raw intelligence here.
+      models = sortByStrategy(models, tools?.length ? 'fastest' : strategy)
 
       for (const m of models) {
         if (isOnCooldown(m)) continue

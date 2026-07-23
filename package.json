@@ -16,6 +16,7 @@
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "docx": "^9.7.1",
     "electron-updater": "^6.8.9",
     "exceljs": "^4.4.0",

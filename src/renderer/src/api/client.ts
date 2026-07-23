@@ -321,4 +321,20 @@ export const api = {
   uploadFile: async (_file: File): Promise<any> => {
     return { file_id: "", filename: "", mime_type: "", size: 0, type: "", url: "", preview: "" }
   },
+
+  listConnectors: async (): Promise<{ id: string; name: string; authMethodSupported: string; status: string; available: boolean }[]> => {
+    return await nexusApi.connectors?.list?.() || []
+  },
+
+  setConnectorToken: async (connectorId: string, token: string) => {
+    return await nexusApi.connectors?.setToken?.(connectorId, token)
+  },
+
+  connectConnectorOAuth: async (connectorId: string) => {
+    return await nexusApi.connectors?.connectOAuth?.(connectorId)
+  },
+
+  disconnectConnector: async (connectorId: string) => {
+    return await nexusApi.connectors?.disconnect?.(connectorId)
+  },
 }

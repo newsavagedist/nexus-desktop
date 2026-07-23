@@ -5,6 +5,7 @@ import { checkOrRequestPermission, resolvePermissionWithAlways, getPolicy, setRu
 import { listProviders, getModelsByClass, getModelsByProvider, getProvider } from '../services/catalog.js'
 import { resolveKey, saveSystemKey, deleteSystemKey, listVaultProviders } from '../services/keyVault.js'
 import { routeWithFallback, routeWithFallbackStream, getCooldownState } from '../services/fallbackChain.js'
+import * as mcpConnectors from '../services/mcpConnectors.js'
 import type { ChatMessage } from '../services/providerClients.js'
 
 const activeStreams = new Map<string, boolean>()
@@ -276,6 +277,19 @@ export function registerIpcHandlers(): void {
     return getPolicy()
   })
 
+  ipcMain.handle('nexus:connectors:list', () => mcpConnectors.listConnectors())
+  ipcMain.handle('nexus:connectors:setToken', (_event, connectorId: string, token: string) => {
+    mcpConnectors.setConnectorToken(connectorId, token)
+    return mcpConnectors.listConnectors()
+  })
+  ipcMain.handle('nexus:connectors:disconnect', async (_event, connectorId: string) => {
+    await mcpConnectors.disconnectConnector(connectorId)
+    return mcpConnectors.listConnectors()
+  })
+  ipcMain.handle('nexus:connectors:connectOAuth', async (_event, connectorId: string) => {
+    return mcpConnectors.connectOAuth(connectorId)
+  })
+
   ipcMain.handle('nexus:providers:list', () => listProviders())
   ipcMain.handle('nexus:providers:modelsByClass', (_event, modelClass: string) => getModelsByClass(modelClass))
   ipcMain.handle('nexus:providers:modelsByProvider', (_event, providerId: string) => getModelsByProvider(providerId))
@@ -284,7 +298,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('nexus:providers:send', async (_event, messages: any[], options: any) => {
     // PLAN mode (default) vs BUILD mode: tools are only attached in BUILD.
     const toolsEnabled = options?.toolsEnabled === true
-    const tools = toolsEnabled ? DESKTOP_TOOLS : undefined
+    const tools = toolsEnabled ? [...DESKTOP_TOOLS, ...(await mcpConnectors.listOpenAiToolsForConnectors())] : undefined
     // Tag permission prompts with the conversation they came from so the
     // renderer can show several at once (one per concurrently streaming
     // conversation) instead of one clobbering another.
@@ -314,7 +328,7 @@ export function registerIpcHandlers(): void {
     }
     // PLAN mode (default) vs BUILD mode: tools are only attached in BUILD.
     const toolsEnabled = options?.toolsEnabled === true
-    const tools = toolsEnabled ? DESKTOP_TOOLS : undefined
+    const tools = toolsEnabled ? [...DESKTOP_TOOLS, ...(await mcpConnectors.listOpenAiToolsForConnectors())] : undefined
     // Tag permission prompts with the conversation they came from so the
     // renderer can show several at once (one per concurrently streaming
     // conversation) instead of one clobbering another.

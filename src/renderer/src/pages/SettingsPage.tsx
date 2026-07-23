@@ -6,13 +6,20 @@ import type { Lang } from "../i18n"
 import { t } from "../i18n"
 import { DEFAULT_THEME_COLOR } from "../constants"
 
-type ProviderTab = "free" | "paid" | "local"
+type SettingsTab = "free" | "paid" | "local" | "connectors"
 
-const PROVIDER_TABS: { key: ProviderTab; label: string; color: string }[] = [
+const SETTINGS_TABS: { key: SettingsTab; label: string; color: string }[] = [
   { key: "free", label: "FREE", color: "#34d399" },
   { key: "paid", label: "PAID", color: "#a78bfa" },
   { key: "local", label: "LOCAL", color: "#fbbf24" },
+  { key: "connectors", label: "CONNECTORS", color: "#38bdf8" },
 ]
+
+// Pre-fills the token's description and minimal scope so the user doesn't have
+// to figure out which checkboxes to tick on GitHub's own page.
+const CONNECTOR_HELP_URLS: Record<string, string> = {
+  github: "https://github.com/settings/tokens/new?description=DaazNexus&scopes=repo",
+}
 
 const PROVIDER_COLORS: Record<string, string> = {
   groq: "#f97316", openrouter: "#8b5cf6", gemini: "#4285f4", github: "#6e40c9",
@@ -31,7 +38,7 @@ interface Props {
 }
 
 export default function SettingsPage({ lang, themeColor, setThemeColor, onNavigate }: Props) {
-  const [tab, setTab] = useState<ProviderTab>("free")
+  const [tab, setTab] = useState<SettingsTab>("free")
   const [categorized, setCategorized] = useState<Record<string, CategorizedProvider[]> | null>(null)
   const [configs, setConfigs] = useState<Record<string, { api_key: string; model: string; temperature: number; has_api_key: boolean }>>({})
   const [saving, setSaving] = useState<string | null>(null)
@@ -39,12 +46,18 @@ export default function SettingsPage({ lang, themeColor, setThemeColor, onNaviga
   const [remoteUrl, setRemoteUrl] = useState("")
   const [remoteKey, setRemoteKey] = useState("")
   const [remoteSaved, setRemoteSaved] = useState<boolean | null>(null)
+  const [connectors, setConnectors] = useState<{ id: string; name: string; authMethodSupported: string; status: string; available: boolean }[]>([])
+  const [connectorInput, setConnectorInput] = useState<Record<string, string>>({})
+  const [connectorSaving, setConnectorSaving] = useState<string | null>(null)
+
+  const loadConnectors = () => api.listConnectors().then(setConnectors).catch(() => {})
 
   useEffect(() => {
     api.getProvidersCategorized().then(setCategorized).catch(() => {})
     const saved = api.getRemoteOllama()
     setRemoteUrl(saved.url)
     setRemoteKey(saved.key ? "••••••••" : "")
+    loadConnectors()
   }, [])
 
   useEffect(() => {
@@ -92,8 +105,42 @@ export default function SettingsPage({ lang, themeColor, setThemeColor, onNaviga
     setTimeout(() => setMsg(null), 3000)
   }
 
-  const providers = categorized?.[tab] || []
-  const tabLabel = PROVIDER_TABS.find(tb => tb.key === tab)!
+  const providers = tab === "connectors" ? [] : (categorized?.[tab] || [])
+  const tabLabel = SETTINGS_TABS.find(tb => tb.key === tab)!
+
+  const connectToken = async (connectorId: string) => {
+    const token = (connectorInput[connectorId] || "").trim()
+    if (!token) return
+    setConnectorSaving(connectorId)
+    try {
+      await api.setConnectorToken(connectorId, token)
+      setConnectorInput(prev => ({ ...prev, [connectorId]: "" }))
+      await loadConnectors()
+    } finally {
+      setConnectorSaving(null)
+    }
+  }
+
+  const connectOAuth = async (connectorId: string) => {
+    setConnectorSaving(connectorId)
+    try {
+      await api.connectConnectorOAuth(connectorId)
+      await loadConnectors()
+    } catch (err) {
+      setMsg({ id: connectorId, text: `Error: ${err instanceof Error ? err.message : "?"}`, ok: false })
+    }
+    setConnectorSaving(null)
+  }
+
+  const disconnectConnector = async (connectorId: string) => {
+    setConnectorSaving(connectorId)
+    try {
+      await api.disconnectConnector(connectorId)
+      await loadConnectors()
+    } finally {
+      setConnectorSaving(null)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -113,7 +160,7 @@ export default function SettingsPage({ lang, themeColor, setThemeColor, onNaviga
 
       <div className="max-w-3xl mx-auto px-4 pt-3">
         <div className="flex gap-1 bg-card rounded-xl p-1 border border-border">
-          {PROVIDER_TABS.map(tb => (
+          {SETTINGS_TABS.map(tb => (
             <button key={tb.key} onClick={() => setTab(tb.key)}
               className={`flex-1 py-2 rounded-lg font-medium transition-all ${tab === tb.key ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               style={tab === tb.key ? { color: tb.color } : undefined}>
@@ -121,13 +168,91 @@ export default function SettingsPage({ lang, themeColor, setThemeColor, onNaviga
             </button>
           ))}
         </div>
-        <p className="text-muted-foreground/60 mt-2 mb-4 text-xs">
-          {tabLabel.key === "free" ? t(lang, "settingsFreeDesc") : tabLabel.key === "paid" ? t(lang, "settingsPaidDesc") : t(lang, "settingsLocalDesc")}
+        <p className="text-muted-foreground/60 mt-2 mb-1 text-xs">
+          {tabLabel.key === "free" ? t(lang, "settingsFreeDesc")
+            : tabLabel.key === "paid" ? t(lang, "settingsPaidDesc")
+            : tabLabel.key === "local" ? t(lang, "settingsLocalDesc")
+            : (lang === "pt"
+                ? "Liga as tuas próprias contas externas (GitHub, Google Drive, Gmail) para o assistente as poder usar em modo BUILD. Cada conector usa a tua própria conta — nada é partilhado com outros utilizadores."
+                : "Link your own external accounts (GitHub, Google Drive, Gmail) so the assistant can use them in BUILD mode. Each connector uses your own account — nothing is shared with other users.")}
         </p>
+        {tab === "connectors" && (
+          <button onClick={() => onNavigate("faq")} className="text-primary hover:text-primary/80 text-xs mb-4 inline-block transition-colors">
+            {lang === "pt" ? "Ver FAQ →" : "See FAQ →"}
+          </button>
+        )}
       </div>
 
+      {tab === "connectors" && (
+        <div className="max-w-3xl mx-auto p-4 space-y-3">
+          {connectors.map(c => {
+            const connected = c.status === "connected"
+            return (
+              <div key={c.id} className={`bg-card border rounded-xl p-4 transition-colors ${connected ? "border-green-700/40 border-l-4 border-l-green-500" : "border-border"}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-medium text-sm text-foreground">{c.name}</span>
+                  {connected
+                    ? <span className="inline-flex items-center gap-1 bg-green-500/15 text-green-400 border border-green-500/30 rounded-full px-2.5 py-0.5 text-xs font-medium">{lang === "pt" ? "Ligado" : "Connected"}</span>
+                    : <span className="text-xs text-muted-foreground">{lang === "pt" ? "Desligado" : "Disconnected"}</span>}
+                </div>
+                {connected ? (
+                  <button
+                    onClick={() => disconnectConnector(c.id)}
+                    disabled={connectorSaving === c.id}
+                    className="text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50">
+                    {lang === "pt" ? "Desligar" : "Disconnect"}
+                  </button>
+                ) : c.authMethodSupported === "oauth" ? (
+                  !c.available ? (
+                    <p className="text-xs text-muted-foreground">
+                      {lang === "pt"
+                        ? "Ainda não configurado (falta o Google Desktop Client ID)."
+                        : "Not configured yet (missing Google Desktop Client ID)."}
+                    </p>
+                  ) : (
+                    <button
+                      onClick={() => connectOAuth(c.id)}
+                      disabled={connectorSaving === c.id}
+                      className="bg-primary text-primary-foreground rounded-full px-4 py-2 font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-opacity">
+                      {lang === "pt" ? "Ligar com Google" : "Connect with Google"}
+                    </button>
+                  )
+                ) : (
+                  <div>
+                    {CONNECTOR_HELP_URLS[c.id] && (
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs text-muted-foreground">{lang === "pt" ? "Personal Access Token" : "Personal Access Token"}</label>
+                        <a href={CONNECTOR_HELP_URLS[c.id]} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:text-primary/80 text-xs transition-colors">
+                          {lang === "pt" ? "Criar token no GitHub" : "Create token on GitHub"} ↗
+                        </a>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="flex-1 rounded-lg px-3 py-2 border border-border bg-input/30 text-foreground text-sm outline-none font-mono"
+                        type="password"
+                        value={connectorInput[c.id] || ""}
+                        onChange={e => setConnectorInput(prev => ({ ...prev, [c.id]: e.target.value }))}
+                        placeholder={lang === "pt" ? "Cola o teu Personal Access Token" : "Paste your Personal Access Token"}
+                      />
+                      <button
+                        onClick={() => connectToken(c.id)}
+                        disabled={connectorSaving === c.id || !(connectorInput[c.id] || "").trim()}
+                        className="bg-primary text-primary-foreground rounded-full px-4 py-2 font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap">
+                        {lang === "pt" ? "Ligar" : "Connect"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       <div className="max-w-3xl mx-auto p-4 space-y-3">
-        {providers.length === 0 && tab !== "local" && (
+        {tab !== "connectors" && providers.length === 0 && tab !== "local" && (
           <p className="text-muted-foreground text-center py-8 text-sm">{t(lang, "settingsNoProviders")}</p>
         )}
         {tab === "local" && providers.length === 0 && (
