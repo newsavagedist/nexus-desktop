@@ -30,6 +30,8 @@ const api = {
       ipcRenderer.invoke('nexus:connectors:setToken', connectorId, token),
     disconnect: (connectorId: string) => ipcRenderer.invoke('nexus:connectors:disconnect', connectorId),
     connectOAuth: (connectorId: string) => ipcRenderer.invoke('nexus:connectors:connectOAuth', connectorId),
+    setWordPressCredentials: (siteUrl: string, username: string, appPassword: string) =>
+      ipcRenderer.invoke('nexus:connectors:setWordPressCredentials', siteUrl, username, appPassword),
   },
   providers: {
     list: () => ipcRenderer.invoke('nexus:providers:list'),

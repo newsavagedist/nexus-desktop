@@ -348,9 +348,6 @@ async function executeToolCall(
       const result = await execa(args.command, execOpts)
       return result.stdout
     }
-    case 'web_search': {
-      return `[web_search:${args.query}] mock — implement search later`
-    }
     case 'create_excel': {
       const resolved = resolve(args.path)
       if (requestPermission) {

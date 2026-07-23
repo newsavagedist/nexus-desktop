@@ -49,6 +49,7 @@ export default function SettingsPage({ lang, themeColor, setThemeColor, onNaviga
   const [connectors, setConnectors] = useState<{ id: string; name: string; authMethodSupported: string; status: string; available: boolean }[]>([])
   const [connectorInput, setConnectorInput] = useState<Record<string, string>>({})
   const [connectorSaving, setConnectorSaving] = useState<string | null>(null)
+  const [wpForm, setWpForm] = useState({ siteUrl: "", username: "", appPassword: "" })
 
   const loadConnectors = () => api.listConnectors().then(setConnectors).catch(() => {})
 
@@ -132,6 +133,20 @@ export default function SettingsPage({ lang, themeColor, setThemeColor, onNaviga
     setConnectorSaving(null)
   }
 
+  const connectWordPress = async () => {
+    const { siteUrl, username, appPassword } = wpForm
+    if (!siteUrl.trim() || !username.trim() || !appPassword.trim()) return
+    setConnectorSaving("wordpress")
+    try {
+      await api.setWordPressCredentials(siteUrl, username, appPassword)
+      setWpForm({ siteUrl: "", username: "", appPassword: "" })
+      await loadConnectors()
+    } catch (err) {
+      setMsg({ id: "wordpress", text: `Error: ${err instanceof Error ? err.message : "?"}`, ok: false })
+    }
+    setConnectorSaving(null)
+  }
+
   const disconnectConnector = async (connectorId: string) => {
     setConnectorSaving(connectorId)
     try {
@@ -173,8 +188,8 @@ export default function SettingsPage({ lang, themeColor, setThemeColor, onNaviga
             : tabLabel.key === "paid" ? t(lang, "settingsPaidDesc")
             : tabLabel.key === "local" ? t(lang, "settingsLocalDesc")
             : (lang === "pt"
-                ? "Liga as tuas próprias contas externas (GitHub, Google Drive, Gmail) para o assistente as poder usar em modo BUILD. Cada conector usa a tua própria conta — nada é partilhado com outros utilizadores."
-                : "Link your own external accounts (GitHub, Google Drive, Gmail) so the assistant can use them in BUILD mode. Each connector uses your own account — nothing is shared with other users.")}
+                ? "Liga as tuas próprias contas externas (GitHub, Google Drive, Gmail, WordPress) para o assistente as poder usar em modo BUILD. Cada conector usa a tua própria conta — nada é partilhado com outros utilizadores."
+                : "Link your own external accounts (GitHub, Google Drive, Gmail, WordPress) so the assistant can use them in BUILD mode. Each connector uses your own account — nothing is shared with other users.")}
         </p>
         {tab === "connectors" && (
           <button onClick={() => onNavigate("faq")} className="text-primary hover:text-primary/80 text-xs mb-4 inline-block transition-colors">
@@ -202,6 +217,46 @@ export default function SettingsPage({ lang, themeColor, setThemeColor, onNaviga
                     className="text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50">
                     {lang === "pt" ? "Desligar" : "Disconnect"}
                   </button>
+                ) : c.id === "wordpress" ? (
+                  <div className="space-y-2">
+                    <input
+                      className="w-full rounded-lg px-3 py-2 border border-border bg-input/30 text-foreground text-sm outline-none font-mono"
+                      type="url"
+                      value={wpForm.siteUrl}
+                      onChange={e => setWpForm(prev => ({ ...prev, siteUrl: e.target.value }))}
+                      placeholder={lang === "pt" ? "URL do site (ex: https://oteusite.com)" : "Site URL (e.g. https://yoursite.com)"}
+                    />
+                    <input
+                      className="w-full rounded-lg px-3 py-2 border border-border bg-input/30 text-foreground text-sm outline-none"
+                      type="text"
+                      value={wpForm.username}
+                      onChange={e => setWpForm(prev => ({ ...prev, username: e.target.value }))}
+                      placeholder={lang === "pt" ? "O teu utilizador WordPress" : "Your WordPress username"}
+                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-muted-foreground">Application Password</label>
+                      <a href={wpForm.siteUrl ? `${wpForm.siteUrl.replace(/\/+$/, '')}/wp-admin/profile.php` : undefined}
+                        target="_blank" rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-1 text-xs transition-colors ${wpForm.siteUrl ? "text-primary hover:text-primary/80" : "text-muted-foreground/40 pointer-events-none"}`}>
+                        {lang === "pt" ? "Criar Application Password" : "Create Application Password"} ↗
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="flex-1 rounded-lg px-3 py-2 border border-border bg-input/30 text-foreground text-sm outline-none font-mono"
+                        type="password"
+                        value={wpForm.appPassword}
+                        onChange={e => setWpForm(prev => ({ ...prev, appPassword: e.target.value }))}
+                        placeholder={lang === "pt" ? "Cola a Application Password gerada" : "Paste the generated Application Password"}
+                      />
+                      <button
+                        onClick={connectWordPress}
+                        disabled={connectorSaving === "wordpress" || !wpForm.siteUrl.trim() || !wpForm.username.trim() || !wpForm.appPassword.trim()}
+                        className="bg-primary text-primary-foreground rounded-full px-4 py-2 font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap">
+                        {lang === "pt" ? "Ligar" : "Connect"}
+                      </button>
+                    </div>
+                  </div>
                 ) : c.authMethodSupported === "oauth" ? (
                   !c.available ? (
                     <p className="text-xs text-muted-foreground">

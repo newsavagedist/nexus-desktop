@@ -72,6 +72,7 @@ export async function checkOrRequestPermission(
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   return new Promise<boolean>((resolve) => {
     const timer = setTimeout(() => {
+      console.log(`[perm] TIMEOUT waiting for a decision on '${action}' (id=${id.slice(-6)}) — treating as denied`)
       pending.delete(id)
       resolve(false)
     }, timeoutMs)
@@ -83,8 +84,10 @@ export async function checkOrRequestPermission(
 
     const win = BrowserWindow.getAllWindows()[0]
     if (win) {
+      console.log(`[perm] request sent to renderer: '${action}' (id=${id.slice(-6)})`)
       win.webContents.send('nexus:permission:request', { id, action, detail, convId: context?.convId })
     } else {
+      console.log(`[perm] NO WINDOW FOUND — auto-denying '${action}' without ever showing a prompt (id=${id.slice(-6)})`)
       pending.delete(id)
       clearTimeout(timer)
       resolve(false)

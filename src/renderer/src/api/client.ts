@@ -334,6 +334,10 @@ export const api = {
     return await nexusApi.connectors?.connectOAuth?.(connectorId)
   },
 
+  setWordPressCredentials: async (siteUrl: string, username: string, appPassword: string) => {
+    return await nexusApi.connectors?.setWordPressCredentials?.(siteUrl, username, appPassword)
+  },
+
   disconnectConnector: async (connectorId: string) => {
     return await nexusApi.connectors?.disconnect?.(connectorId)
   },

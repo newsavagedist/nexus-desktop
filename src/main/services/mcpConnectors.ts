@@ -64,10 +64,15 @@ const OAUTH_PROVIDERS: Record<string, { authorizeUrl: string; tokenUrl: string; 
 // same Google connectors, same minimal (readonly-first) scope choice.
 const CONNECTOR_SCOPES: Record<string, string[]> = {
   gdrive: ['https://www.googleapis.com/auth/drive.readonly'],
+  gmail: [
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.send',
+  ],
 }
 
 const CONNECTOR_PROVIDER: Record<string, string> = {
   gdrive: 'google',
+  gmail: 'google',
 }
 
 // Phase 1 wired up GitHub (remote MCP server, PAT auth, zero subprocesses).
@@ -91,6 +96,30 @@ const CONNECTOR_DEFS: Record<string, ConnectorDef> = {
     authMethod: 'oauth',
     command: nodeServer('gdrive-server'),
     buildEnv: (token) => ({ GOOGLE_ACCESS_TOKEN: token }),
+  },
+  gmail: {
+    id: 'gmail',
+    name: 'Gmail',
+    transport: 'stdio',
+    authMethod: 'oauth',
+    command: nodeServer('gmail-server'),
+    buildEnv: (token) => ({ GOOGLE_ACCESS_TOKEN: token }),
+  },
+  // WordPress uses an Application Password (native to WP since 5.6) — a
+  // per-user credential, no OAuth. The "token" stored in the vault is a
+  // JSON blob {site_url, username, app_password} rather than a single
+  // string, since a self-hosted site needs its own URL too, unlike
+  // GitHub/Google's fixed endpoints.
+  wordpress: {
+    id: 'wordpress',
+    name: 'WordPress',
+    transport: 'stdio',
+    authMethod: 'pat',
+    command: nodeServer('wordpress-server'),
+    buildEnv: (token) => {
+      const blob = JSON.parse(token)
+      return { WP_SITE_URL: blob.site_url, WP_USERNAME: blob.username, WP_APP_PASSWORD: blob.app_password }
+    },
   },
 }
 
@@ -127,6 +156,15 @@ export function listConnectors(): ConnectorState[] {
 export function setConnectorToken(connectorId: string, token: string): void {
   if (!CONNECTOR_DEFS[connectorId]) throw new Error(`Unknown connector: ${connectorId}`)
   saveSystemKey(vaultKey(connectorId), token)
+}
+
+export function setWordPressCredentials(siteUrl: string, username: string, appPassword: string): void {
+  const blob = JSON.stringify({
+    site_url: siteUrl.trim().replace(/\/+$/, ''),
+    username: username.trim(),
+    app_password: appPassword.trim(),
+  })
+  saveSystemKey(vaultKey('wordpress'), blob)
 }
 
 export async function connectOAuth(connectorId: string): Promise<ConnectorState[]> {

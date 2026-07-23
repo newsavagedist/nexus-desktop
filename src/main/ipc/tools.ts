@@ -6,6 +6,7 @@ import { listProviders, getModelsByClass, getModelsByProvider, getProvider } fro
 import { resolveKey, saveSystemKey, deleteSystemKey, listVaultProviders } from '../services/keyVault.js'
 import { routeWithFallback, routeWithFallbackStream, getCooldownState } from '../services/fallbackChain.js'
 import * as mcpConnectors from '../services/mcpConnectors.js'
+import { maybeEnrichWithWeb } from '../services/webSearch.js'
 import type { ChatMessage } from '../services/providerClients.js'
 
 const activeStreams = new Map<string, boolean>()
@@ -33,6 +34,17 @@ function withModeSystemPrompt(messages: ChatMessage[], toolsEnabled: boolean, la
   const table = toolsEnabled ? BUILD_MODE_SYSTEM_PROMPT : PLAN_MODE_SYSTEM_PROMPT
   const text = table[lang === 'en' ? 'en' : 'pt']
   return [{ role: 'system', content: text }, ...messages]
+}
+
+// Read-only, so — unlike bash/write_file — it runs in PLAN mode too, not just
+// BUILD: a question needing current info deserves a real answer whether or
+// not file/shell tools are enabled for this message.
+async function withWebSearchEnrichment(messages: ChatMessage[]): Promise<ChatMessage[]> {
+  const lastUser = [...messages].reverse().find(m => m.role === 'user')
+  if (!lastUser?.content) return messages
+  const enrichment = await maybeEnrichWithWeb(lastUser.content)
+  if (!enrichment) return messages
+  return [...messages, { role: 'system', content: enrichment }]
 }
 
 const DESKTOP_TOOLS = [
@@ -289,6 +301,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('nexus:connectors:connectOAuth', async (_event, connectorId: string) => {
     return mcpConnectors.connectOAuth(connectorId)
   })
+  ipcMain.handle('nexus:connectors:setWordPressCredentials', (_event, siteUrl: string, username: string, appPassword: string) => {
+    mcpConnectors.setWordPressCredentials(siteUrl, username, appPassword)
+    return mcpConnectors.listConnectors()
+  })
 
   ipcMain.handle('nexus:providers:list', () => listProviders())
   ipcMain.handle('nexus:providers:modelsByClass', (_event, modelClass: string) => getModelsByClass(modelClass))
@@ -304,8 +320,9 @@ export function registerIpcHandlers(): void {
     // conversation) instead of one clobbering another.
     const requestPermission = (action: string, detail: string) =>
       checkOrRequestPermission(action, detail, 60000, { convId: options?.convId })
+    const enrichedMessages = await withWebSearchEnrichment(messages)
     return routeWithFallback(
-      withModeSystemPrompt(messages, toolsEnabled, options?.lang),
+      withModeSystemPrompt(enrichedMessages, toolsEnabled, options?.lang),
       options.modelClass,
       options.model,
       options.strategy,
@@ -335,8 +352,9 @@ export function registerIpcHandlers(): void {
     const requestPermission = (action: string, detail: string) =>
       checkOrRequestPermission(action, detail, 60000, { convId: options?.convId })
     try {
+      const enrichedMessages = await withWebSearchEnrichment(messages)
       const gen = routeWithFallbackStream(
-        withModeSystemPrompt(messages, toolsEnabled, options?.lang),
+        withModeSystemPrompt(enrichedMessages, toolsEnabled, options?.lang),
         options.modelClass,
         options.model,
         options.strategy,
