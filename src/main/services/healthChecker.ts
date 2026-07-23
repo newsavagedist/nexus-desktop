@@ -8,11 +8,14 @@ const failureCount = new Map<string, number>()
 
 let disabledProviders = new Set<string>()
 
-async function checkHealthLightweight(baseUrl: string, apiKey: string): Promise<boolean> {
-  const url = `${baseUrl.replace(/\/+$/, '')}/models`
+async function checkHealthLightweight(baseUrl: string, apiKey: string, apiType: string): Promise<boolean> {
+  const base = baseUrl.replace(/\/+$/, '')
+  // Gemini authenticates via a `?key=` query param, not a Bearer header —
+  // sending Authorization here would 401 on a perfectly healthy provider.
+  const url = apiType === 'google' ? `${base}/models?key=${apiKey}` : `${base}/models`
   try {
     const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers: apiType === 'google' ? {} : { Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(5000),
     })
     return resp.status === 200
@@ -31,9 +34,10 @@ export async function runHealthCheck(): Promise<void> {
     const apiKey = resolveKey(provider.id)
     if (!apiKey) continue
 
-    const ok = await checkHealthLightweight(provider.baseUrl, apiKey)
+    const ok = await checkHealthLightweight(provider.baseUrl, apiKey, provider.apiType)
     if (ok) {
       failureCount.set(provider.id, 0)
+      disabledProviders.delete(provider.id)
     } else {
       const count = (failureCount.get(provider.id) || 0) + 1
       failureCount.set(provider.id, count)

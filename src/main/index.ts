@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { registerIpcHandlers } from './ipc/tools.js'
 import { initAutoUpdater } from './updater.js'
 import { initRemoteCatalog } from './services/remoteCatalog.js'
+import { startHealthChecker } from './services/healthChecker.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..', '..')
@@ -136,6 +137,7 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   registerIpcHandlers()
   initRemoteCatalog() // non-blocking: bundled catalog serves until remote/cache applies
+  startHealthChecker() // periodic provider reachability check, feeds isProviderDisabled() in fallbackChain
   createWindow()
   initAutoUpdater(isDev)
 

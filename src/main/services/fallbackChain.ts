@@ -3,6 +3,7 @@ import { resolveKey } from './keyVault.js'
 import { getClient, type ChatMessage, type ChatResult } from './providerClients.js'
 import { checkAndRecord } from './rateLimiter.js'
 import { recordAttempt } from './analytics.js'
+import { isProviderDisabled } from './healthChecker.js'
 import { createExcel, createWord, createPowerpoint, createPdf } from '../tools/office.js'
 
 const MAX_TOOL_ITERATIONS = 10
@@ -40,6 +41,7 @@ async function filterModelsWithKeys(models: string[]): Promise<string[]> {
   for (const model of models) {
     const provider = getProvider(model)
     if (!provider) continue
+    if (isProviderDisabled(provider.id)) continue
     if (!provider.requiresKey) {
       available.push(model)
     } else {
@@ -55,6 +57,18 @@ function prioritizeVision(models: string[]): string[] {
   const v = models.filter(m => visionIds.has(m))
   const rest = models.filter(m => !visionIds.has(m))
   return [...v, ...rest]
+}
+
+// When a request carries tools (BUILD mode), only models the catalog marks as
+// tool-capable may receive them. Sending `tools` to a model that doesn't
+// really support function-calling doesn't error — the model just narrates a
+// fabricated success ("ficheiro gravado!") instead of ever calling write_file,
+// because the BUILD-mode system prompt tells it the action "genuinely
+// happens". Filtering here (rather than trusting the model's own text) is the
+// only reliable way to catch that before it reaches the user.
+function filterToolCapable(models: string[]): string[] {
+  const capableIds = new Set(listAvailable().filter(m => m.tools).map(m => m.id))
+  return models.filter(m => capableIds.has(m))
 }
 
 type ToolNotify = (ev: { id: string; name: string; args: Record<string, unknown>; status: 'running' | 'completed' | 'failed'; result?: string; started_at: number; completed_at?: number }) => void
@@ -443,7 +457,8 @@ export async function routeWithFallback(
   const hasImages = messages.some(m => m.images?.length)
 
   if (model) {
-    const filtered = await filterModelsWithKeys([model])
+    let filtered = await filterModelsWithKeys([model])
+    if (tools?.length) filtered = filterToolCapable(filtered)
     if (filtered.length) {
       try {
         return await tryModels(filtered, messages, maxTokens, tools, requestPermission)
@@ -469,9 +484,10 @@ export async function routeWithFallback(
     for (const attemptClass of fbOrder) {
       let models = getModelsByClass(attemptClass)
       models = await filterModelsWithKeys(models)
+      if (tools?.length) models = filterToolCapable(models)
       if (!models.length) {
         if (!lastErrors.has(attemptClass)) {
-          lastErrors.set(attemptClass, 'no usable models (missing API keys or all on cooldown)')
+          lastErrors.set(attemptClass, 'no usable models (missing API keys, all on cooldown, or none support tools)')
         }
         continue
       }
@@ -543,7 +559,8 @@ export async function* routeWithFallbackStream(
   }
 
   if (model) {
-    const filtered = await filterModelsWithKeys([model])
+    let filtered = await filterModelsWithKeys([model])
+    if (tools?.length) filtered = filterToolCapable(filtered)
     if (filtered.length) {
       const m = filtered[0]
       const provider = getProvider(m)
@@ -608,6 +625,7 @@ export async function* routeWithFallbackStream(
     for (const attemptClass of fbOrder) {
       let models = getModelsByClass(attemptClass)
       models = await filterModelsWithKeys(models)
+      if (tools?.length) models = filterToolCapable(models)
       if (!models.length) continue
       if (hasImages) models = prioritizeVision(models)
       models = sortByStrategy(models, strategy)
